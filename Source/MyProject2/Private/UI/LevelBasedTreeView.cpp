@@ -123,10 +123,10 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
         return HeaderName == TEXT("Level");
     });
     
-    // 인덱스를 찾지 못했으면 기본값 사용
-    PartNoColIdx = (PartNoColIdx != INDEX_NONE) ? PartNoColIdx : 1; // 두 번째 열로 가정
-    NextPartColIdx = (NextPartColIdx != INDEX_NONE) ? NextPartColIdx : 3; // 네 번째 열로 가정
-    LevelColIdx = (LevelColIdx != INDEX_NONE) ? LevelColIdx : 0; // 첫 번째 열로 가정
+    // 인덱스를 찾지 못했으면 기본값 사용 (실제 엑셀 파일 구조 기준)
+    PartNoColIdx = (PartNoColIdx != INDEX_NONE) ? PartNoColIdx : 3; // D열 (Part No)
+    NextPartColIdx = (NextPartColIdx != INDEX_NONE) ? NextPartColIdx : 13; // N열 (NextPart)
+    LevelColIdx = (LevelColIdx != INDEX_NONE) ? LevelColIdx : 1; // B열 (Level)
     
     // 1단계: 모든 항목 생성 및 레벨별 그룹화
     CreateAndGroupItems(ExcelData, PartNoColIdx, NextPartColIdx, LevelColIdx);
