@@ -13,25 +13,39 @@
  */
 struct FPartTreeItem
 {
-    // 파트 번호
-    FString PartNo;
+ // 필드 순서를 생성자 초기화 순서와 일치시킴
+ FString PartNo;
+ FString NextPart;
+ int32 Level;
+ FString Type;
     
-    // 다음 파트 번호 (상위 항목)
-    FString NextPart;
+ // 추가 필드
+ FString SN;
+ FString PartRev;
+ FString PartStatus;
+ FString Latest;
+ FString Nomenclature;
+ FString InstanceIDTotalAllDB;
+ FString Qty;
     
-    // 레벨 (계층 구조)
-    int32 Level;
+ // 자식 항목 배열
+ TArray<TSharedPtr<FPartTreeItem>> Children;
     
-    // 자식 항목 배열
-    TArray<TSharedPtr<FPartTreeItem>> Children;
-    
-    // 생성자
-    FPartTreeItem(const FString& InPartNo, const FString& InNextPart, int32 InLevel)
-        : PartNo(InPartNo)
-        , NextPart(InNextPart)
-        , Level(InLevel)
-    {
-    }
+ // 생성자
+ FPartTreeItem(const FString& InPartNo, const FString& InNextPart, int32 InLevel, const FString& InType = TEXT(""))
+     : PartNo(InPartNo)
+     , NextPart(InNextPart)
+     , Level(InLevel)
+     , Type(InType)
+     , SN(TEXT(""))
+     , PartRev(TEXT(""))
+     , PartStatus(TEXT(""))
+     , Latest(TEXT(""))
+     , Nomenclature(TEXT(""))
+     , InstanceIDTotalAllDB(TEXT(""))
+     , Qty(TEXT(""))
+ {
+ }
 };
 
 /**
@@ -56,7 +70,13 @@ public:
      * 엑셀 파일 로드 및 트리뷰 구성 함수
      */
     bool BuildTreeView(const FString& FilePath);
-    
+
+    TSharedRef<SWidget> GetMetadataWidget();
+
+    FText GetSelectedItemMetadata() const;
+
+    void OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESelectInfo::Type SelectInfo);
+       
 private:
     // 트리뷰 위젯
     TSharedPtr<STreeView<TSharedPtr<FPartTreeItem>>> TreeView;
@@ -69,6 +89,7 @@ private:
     
     // 레벨별 항목 맵 (레벨을 키로 사용)
     TMap<int32, TArray<TSharedPtr<FPartTreeItem>>> LevelToItemsMap;
+
     
     // 최대 레벨
     int32 MaxLevel;
@@ -97,9 +118,12 @@ private:
      * 자식 항목 가져오기 함수
      */
     void OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<TSharedPtr<FPartTreeItem>>& OutChildren);
+
+    FString GetSafeString(const FString& InStr) const;
+
 };
 
 /**
  * 트리뷰 위젯 생성 헬퍼 함수
  */
-MYPROJECT2_API void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutWidget, const FString& ExcelFilePath);
+MYPROJECT2_API void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr<SWidget>& OutMetadataWidget, const FString& ExcelFilePath);

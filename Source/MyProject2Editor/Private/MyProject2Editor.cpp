@@ -1,4 +1,6 @@
-﻿#include "MyProject2Editor.h"
+﻿// MyProject2Editor.cpp
+
+#include "MyProject2Editor.h"
 #include "LevelEditor.h"
 #include "MyProject2/Public//UI/LevelBasedTreeView.h"
 #include "Framework/Application/SlateApplication.h"
@@ -65,7 +67,21 @@ void FMyProject2EditorModule::OnToolButtonClicked()
     
     // 트리뷰 위젯 생성
     TSharedPtr<SWidget> TreeViewWidget;
-    CreateLevelBasedTreeView(TreeViewWidget, CSVFilePath);
+    TSharedPtr<SWidget> MetadataWidget;
+    CreateLevelBasedTreeView(TreeViewWidget, MetadataWidget, CSVFilePath);
+
+    TSharedRef<SWidget> ContentWidget = SNew(SSplitter)
+        .Orientation(Orient_Horizontal)
+        + SSplitter::Slot()
+        .Value(0.5f)
+        [
+            TreeViewWidget.ToSharedRef()
+        ]
+        + SSplitter::Slot()
+        .Value(0.5f)
+        [
+            MetadataWidget.ToSharedRef()
+        ];
     
     // 창 생성
     TreeViewWindow = SNew(SWindow)
@@ -76,7 +92,7 @@ void FMyProject2EditorModule::OnToolButtonClicked()
         .SupportsMaximize(true)
         .SupportsMinimize(true)
         [
-            TreeViewWidget.ToSharedRef()
+            ContentWidget
         ];
     
     // 창 표시

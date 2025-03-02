@@ -149,8 +149,122 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     return AllRootItems.Num() > 0;
 }
 
+TSharedRef<SWidget> SLevelBasedTreeView::GetMetadataWidget()
+{
+    // 메타데이터 표시를 위한 텍스트 블록 생성
+    TSharedRef<STextBlock> MetadataText = SNew(STextBlock)
+        .Text(TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SLevelBasedTreeView::GetSelectedItemMetadata)));
+    
+    return MetadataText;
+}
+
+// 선택된 항목의 메타데이터를 텍스트로 반환하는 메서드
+FText SLevelBasedTreeView::GetSelectedItemMetadata() const
+{
+    // 선택된 항목 가져오기
+    TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
+    
+    if (SelectedItems.Num() == 0)
+    {
+        return FText::FromString("No item selected");
+    }
+    
+    TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
+    
+    // 로컬 도우미 함수 정의
+    auto SafeStr = [](const FString& Str) -> FString {
+        return Str.IsEmpty() ? TEXT("N/A") : Str;
+    };
+    
+    // 선택된 항목의 메타데이터 구성
+    FString MetadataText = FString::Printf(
+        TEXT("S/N: %s\n")
+        TEXT("Level: %d\n")
+        TEXT("Type: %s\n")
+        TEXT("Part No: %s\n")
+        TEXT("Part Rev: %s\n")
+        TEXT("Part Status: %s\n")
+        TEXT("Latest: %s\n")
+        TEXT("Nomenclature: %s\n")
+        TEXT("Instance ID 총수량(ALL DB): %s\n")
+        TEXT("Qty: %s\n")
+        TEXT("NextPart: %s"),
+        *SafeStr(SelectedItem->SN),
+        SelectedItem->Level,
+        *SafeStr(SelectedItem->Type),
+        *SafeStr(SelectedItem->PartNo),
+        *SafeStr(SelectedItem->PartRev),
+        *SafeStr(SelectedItem->PartStatus),
+        *SafeStr(SelectedItem->Latest),
+        *SafeStr(SelectedItem->Nomenclature),
+        *SafeStr(SelectedItem->InstanceIDTotalAllDB),
+        *SafeStr(SelectedItem->Qty),
+        *SafeStr(SelectedItem->NextPart)
+    );
+    
+    return FText::FromString(MetadataText);
+}
+
+// LevelBasedTreeView.cpp 파일에서
+FString SLevelBasedTreeView::GetSafeString(const FString& InStr) const
+{
+    return InStr.IsEmpty() ? TEXT("N/A") : InStr;
+}
+
+void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESelectInfo::Type SelectInfo)
+{
+    // 선택 변경 시 처리할 작업 (필요한 경우)
+    // GetSelectedItemMetadata() 메서드는 TAttribute를 통해 자동으로 호출되므로
+    // 여기에 특별한 작업이 필요 없음
+}
+
 void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& ExcelData, int32 PartNoColIdx, int32 NextPartColIdx, int32 LevelColIdx)
 {
+    // 필요한 열 인덱스 찾기
+    const TArray<FString>& HeaderRow = ExcelData[0];
+    
+    int32 SNColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("S/N");
+    });
+    
+    int32 TypeColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("Type");
+    });
+    
+    int32 PartRevColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("Part Rev");
+    });
+    
+    int32 PartStatusColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("Part Status");
+    });
+    
+    int32 LatestColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("Latest");
+    });
+    
+    int32 NomenclatureColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("Nomenclature");
+    });
+    
+    int32 InstanceIDTotalColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("Instance ID 총수량(ALL DB)");
+    });
+    
+    int32 QtyColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("Qty");
+    });
+    
+    // 인덱스를 찾지 못했을 때 기본값 설정
+    SNColIdx = (SNColIdx != INDEX_NONE) ? SNColIdx : 0;
+    TypeColIdx = (TypeColIdx != INDEX_NONE) ? TypeColIdx : 2;
+    PartRevColIdx = (PartRevColIdx != INDEX_NONE) ? PartRevColIdx : 4;
+    PartStatusColIdx = (PartStatusColIdx != INDEX_NONE) ? PartStatusColIdx : 5;
+    LatestColIdx = (LatestColIdx != INDEX_NONE) ? LatestColIdx : 6;
+    NomenclatureColIdx = (NomenclatureColIdx != INDEX_NONE) ? NomenclatureColIdx : 7;
+    InstanceIDTotalColIdx = (InstanceIDTotalColIdx != INDEX_NONE) ? InstanceIDTotalColIdx : 11;
+    QtyColIdx = (QtyColIdx != INDEX_NONE) ? QtyColIdx : 12;
+    
     // 모든 행 처리
     for (int32 i = 1; i < ExcelData.Num(); ++i)
     {
@@ -161,7 +275,7 @@ void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& Exc
         FString PartNo = Row[PartNoColIdx].TrimStartAndEnd();
         FString NextPart = Row[NextPartColIdx].TrimStartAndEnd();
         
-        // 레벨 파싱 (FCString::Atoi 사용)
+        // 레벨 파싱
         FString LevelStr = Row[LevelColIdx].TrimStartAndEnd();
         int32 Level = 0;
         
@@ -174,6 +288,16 @@ void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& Exc
         {
             // 파트 항목 생성
             TSharedPtr<FPartTreeItem> Item = MakeShared<FPartTreeItem>(PartNo, NextPart, Level);
+            
+            // 추가 필드 설정
+            Item->Type = (TypeColIdx < Row.Num()) ? Row[TypeColIdx].TrimStartAndEnd() : TEXT("");
+            Item->SN = (SNColIdx < Row.Num()) ? Row[SNColIdx].TrimStartAndEnd() : TEXT("");
+            Item->PartRev = (PartRevColIdx < Row.Num()) ? Row[PartRevColIdx].TrimStartAndEnd() : TEXT("");
+            Item->PartStatus = (PartStatusColIdx < Row.Num()) ? Row[PartStatusColIdx].TrimStartAndEnd() : TEXT("");
+            Item->Latest = (LatestColIdx < Row.Num()) ? Row[LatestColIdx].TrimStartAndEnd() : TEXT("");
+            Item->Nomenclature = (NomenclatureColIdx < Row.Num()) ? Row[NomenclatureColIdx].TrimStartAndEnd() : TEXT("");
+            Item->InstanceIDTotalAllDB = (InstanceIDTotalColIdx < Row.Num()) ? Row[InstanceIDTotalColIdx].TrimStartAndEnd() : TEXT("");
+            Item->Qty = (QtyColIdx < Row.Num()) ? Row[QtyColIdx].TrimStartAndEnd() : TEXT("");
             
             // 맵에 추가
             PartNoToItemMap.Add(PartNo, Item);
@@ -271,8 +395,38 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 // 트리뷰 위젯 생성 헬퍼 함수
-void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutWidget, const FString& ExcelFilePath)
+void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr<SWidget>& OutMetadataWidget,const FString& ExcelFilePath)
 {
-    OutWidget = SNew(SLevelBasedTreeView)
+    // SLevelBasedTreeView 인스턴스 생성
+    TSharedPtr<SLevelBasedTreeView> TreeView = SNew(SLevelBasedTreeView)
         .ExcelFilePath(ExcelFilePath);
+    
+    OutTreeViewWidget = TreeView;
+    
+    // 메타데이터 위젯 생성
+    OutMetadataWidget = SNew(SBorder)
+        .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+        .Padding(FMargin(4.0f))
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(2)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString("Item Details"))
+                .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
+            ]
+            + SVerticalBox::Slot()
+            .FillHeight(1.0f)
+            .Padding(2)
+            [
+                SNew(SScrollBox)
+                + SScrollBox::Slot()
+                [
+                    // 메타데이터 내용 표시를 위한 기본 텍스트
+                    TreeView->GetMetadataWidget()
+                ]
+            ]
+        ];
 }
