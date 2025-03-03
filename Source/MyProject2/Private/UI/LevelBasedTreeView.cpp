@@ -102,7 +102,11 @@ void SLevelBasedTreeView::CacheImageExistence()
                 FString PartNo = Parts[3];
                 
                 // Set에 파트 번호 추가
-                PartsWithImageSet.Add(PartNo);
+                if(PartNoToItemMap.Contains(PartNo))
+                {
+                    PartsWithImageSet.Add(PartNo);
+                }
+                    
             }
         }
     }
