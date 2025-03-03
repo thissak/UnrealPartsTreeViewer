@@ -8,6 +8,13 @@
 #include "Widgets/Text/STextBlock.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 
+#if WITH_EDITOR
+#include "Editor.h"
+#include "Editor/EditorEngine.h"
+#include "Engine/Selection.h"
+#include "EngineUtils.h"
+#endif
+
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 void SLevelBasedTreeView::Construct(const FArguments& InArgs)
@@ -60,6 +67,53 @@ void SLevelBasedTreeView::SetupEmptyBrush(FSlateBrush* Brush)
     CurrentImageBrush = MakeShareable(Brush);
 }
 
+// 액터 선택 함수 추가
+void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
+{
+#if WITH_EDITOR
+    if (GEditor)
+    {
+        // 현재 선택 해제
+        GEditor->SelectNone(true, true, false);
+        
+        // 월드의 모든 액터를 검색
+        UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+        if (EditorWorld)
+        {
+            bool bFoundAnyActor = false;
+            
+            // 모든 액터 순회
+            for (TActorIterator<AActor> ActorItr(EditorWorld); ActorItr; ++ActorItr)
+            {
+                AActor* CurrentActor = *ActorItr;
+                if (CurrentActor)
+                {
+                    // 액터 이름과 PartNo 비교
+                    FString ActorName = CurrentActor->GetName();
+                    
+                    // 정확히 일치하거나 부분 문자열로 포함되는지 검사
+                    if (ActorName.Equals(PartNo, ESearchCase::IgnoreCase) || 
+                        ActorName.Contains(PartNo, ESearchCase::IgnoreCase))
+                    {
+                        // 액터 선택
+                        GEditor->SelectActor(CurrentActor, true, true, true);
+                        bFoundAnyActor = true;
+                        
+                        // 선택된 액터 정보 로그 출력
+                        UE_LOG(LogTemp, Display, TEXT("액터 선택됨: %s (PartNo: %s)"), *ActorName, *PartNo);
+                    }
+                }
+            }
+            
+            if (!bFoundAnyActor)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("일치하는 액터를 찾을 수 없음: %s"), *PartNo);
+            }
+        }
+    }
+#endif
+}
+
 // 이미지 캐싱 로직 수정
 void SLevelBasedTreeView::CacheImageExistence()
 {
@@ -102,7 +156,7 @@ void SLevelBasedTreeView::CacheImageExistence()
                 // 3번째 인덱스가 파트 번호
                 FString PartNo = Parts[3];
                 
-                // Set에 파트 번호 추가
+                // PartsWithImageSet에 파트 번호 추가
                 if(PartNoToItemMap.Contains(PartNo))
                 {
                     PartsWithImageSet.Add(PartNo);
@@ -484,6 +538,9 @@ void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESe
     if (Item.IsValid())
     {
         UpdateSelectedItemImage();
+        
+        // 선택된 노드와 같은 이름의 액터 선택
+        SelectActorByPartNo(Item->PartNo);
     }
 }
 

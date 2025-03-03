@@ -100,6 +100,9 @@ private:
 
     // 이미지가 있는 파트 번호 집합
     TSet<FString> PartsWithImageSet;
+
+    /** PartNo와 이름이 일치하는 액터 선택 */
+    void SelectActorByPartNo(const FString& PartNo);
     
     // 이미지 유무 캐싱
     void CacheImageExistence();
