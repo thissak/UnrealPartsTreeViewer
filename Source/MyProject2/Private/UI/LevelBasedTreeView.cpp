@@ -32,6 +32,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
         .OnGenerateRow(this, &SLevelBasedTreeView::OnGenerateRow)
         .OnGetChildren(this, &SLevelBasedTreeView::OnGetChildren)
         .OnSelectionChanged(this, &SLevelBasedTreeView::OnSelectionChanged)
+        .OnContextMenuOpening(this, &SLevelBasedTreeView::OnContextMenuOpening)
         .HeaderRow
         (
             SNew(SHeaderRow)
@@ -124,6 +125,45 @@ void SLevelBasedTreeView::CacheImageExistence()
            PartsWithImageSet.Num(), PartNoToItemMap.Num());
     
     UE_LOG(LogTemp, Display, TEXT("CacheImageExistence 완료"));
+}
+
+TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
+{
+    FMenuBuilder MenuBuilder(true, nullptr);
+    
+    MenuBuilder.BeginSection("TreeItemActions", FText::FromString(TEXT("메뉴")));
+    {
+        MenuBuilder.AddMenuEntry(
+            FText::FromString(TEXT("상세 정보 보기")),
+            FText::FromString(TEXT("선택한 항목의 상세 정보를 봅니다")),
+            FSlateIcon(),
+            FUIAction(FExecuteAction::CreateLambda([]() { /* 비어있음 */ }))
+        );
+        
+        MenuBuilder.AddMenuEntry(
+            FText::FromString(TEXT("이미지 보기")),
+            FText::FromString(TEXT("선택한 항목의 이미지를 봅니다")),
+            FSlateIcon(),
+            FUIAction(FExecuteAction::CreateLambda([]() { /* 비어있음 */ }))
+        );
+        
+        MenuBuilder.AddMenuEntry(
+            FText::FromString(TEXT("모두 펼치기")),
+            FText::FromString(TEXT("모든 트리 항목을 펼칩니다")),
+            FSlateIcon(),
+            FUIAction(FExecuteAction::CreateLambda([]() { /* 비어있음 */ }))
+        );
+        
+        MenuBuilder.AddMenuEntry(
+            FText::FromString(TEXT("모두 접기")),
+            FText::FromString(TEXT("모든 트리 항목을 접습니다")),
+            FSlateIcon(),
+            FUIAction(FExecuteAction::CreateLambda([]() { /* 비어있음 */ }))
+        );
+    }
+    MenuBuilder.EndSection();
+
+    return MenuBuilder.MakeWidget();
 }
 
 bool SLevelBasedTreeView::ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows)

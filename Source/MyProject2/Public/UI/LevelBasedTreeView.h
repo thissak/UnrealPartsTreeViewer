@@ -93,6 +93,9 @@ private:
     TSharedPtr<FSlateBrush> CurrentImageBrush;
     TSharedPtr<SImage> ItemImageWidget;
 
+    /** 컨텍스트 메뉴 생성 */
+    TSharedPtr<SWidget> OnContextMenuOpening();
+
     // 이미지가 있는 파트 번호 집합
     TSet<FString> PartsWithImageSet;
     
