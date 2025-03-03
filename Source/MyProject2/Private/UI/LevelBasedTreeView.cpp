@@ -7,6 +7,7 @@
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Windows/WindowsPlatformApplicationMisc.h"
 
 #if WITH_EDITOR
 #include "Editor.h"
@@ -40,6 +41,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
             .OnGetChildren(this, &SLevelBasedTreeView::OnGetChildren)
             .OnSelectionChanged(this, &SLevelBasedTreeView::OnSelectionChanged)
             .OnContextMenuOpening(this, &SLevelBasedTreeView::OnContextMenuOpening)
+            .OnMouseButtonDoubleClick(this, &SLevelBasedTreeView::OnMouseButtonDoubleClick)
             .HeaderRow
             (
                 SNew(SHeaderRow)
@@ -112,6 +114,18 @@ void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
         }
     }
 #endif
+}
+
+void SLevelBasedTreeView::OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Item)
+{
+    if (Item.IsValid())
+    {
+        // 더블클릭 시 SelectActorByPartNo 함수 호출
+        SelectActorByPartNo(Item->PartNo);
+        
+        // 로그에 메시지 출력
+        UE_LOG(LogTemp, Display, TEXT("더블클릭: '%s' 액터 선택됨"), *Item->PartNo);
+    }
 }
 
 // 이미지 캐싱 로직 수정
@@ -191,6 +205,47 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
     
     MenuBuilder.BeginSection("TreeItemActions", FText::FromString(TEXT("메뉴")));
     {
+        // 노드 이름 클립보드에 복사 (선택된 항목이 있을 때만 활성화)
+        MenuBuilder.AddMenuEntry(
+            FText::FromString(TEXT("노드 이름 복사")),
+            FText::FromString(TEXT("선택한 항목의 이름을 클립보드에 복사합니다")),
+            FSlateIcon(),
+            FUIAction(
+                FExecuteAction::CreateLambda([this]() {
+                    TArray<TSharedPtr<FPartTreeItem>> Items = TreeView->GetSelectedItems();
+                    if (Items.Num() > 0)
+                    {
+                        FString CombinedNames;
+                        // 모든 선택된 항목의 이름을 합치기
+                        for (int32 i = 0; i < Items.Num(); i++)
+                        {
+                            if (i > 0)
+                            {
+                                // 첫 번째 항목이 아니면 구분자 추가
+                                CombinedNames.Append(TEXT(", "));
+                            }
+                            CombinedNames.Append(Items[i]->PartNo);
+                        }
+                    
+                        // 클립보드에 모든 선택된 항목의 이름 복사
+                        FPlatformApplicationMisc::ClipboardCopy(*CombinedNames);
+                    
+                        if (Items.Num() == 1)
+                        {
+                            UE_LOG(LogTemp, Display, TEXT("노드 이름 '%s'이(가) 클립보드에 복사되었습니다"), *Items[0]->PartNo);
+                        }
+                        else
+                        {
+                            UE_LOG(LogTemp, Display, TEXT("%d개의 노드 이름이 클립보드에 복사되었습니다: %s"), Items.Num(), *CombinedNames);
+                        }
+                    }
+                }),
+                FCanExecuteAction::CreateLambda([this]() { 
+                    // 하나 이상의 항목이 선택되었을 때만 활성화
+                    return TreeView->GetSelectedItems().Num() > 0; 
+                })
+            )
+        );
         // 상세 정보 보기 (선택된 항목이 있을 때만 활성화)
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("상세 정보 보기")),
@@ -538,9 +593,7 @@ void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESe
     if (Item.IsValid())
     {
         UpdateSelectedItemImage();
-        
-        // 선택된 노드와 같은 이름의 액터 선택
-        SelectActorByPartNo(Item->PartNo);
+
     }
 }
 

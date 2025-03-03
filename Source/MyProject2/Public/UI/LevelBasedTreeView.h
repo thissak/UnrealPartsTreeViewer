@@ -103,6 +103,8 @@ private:
 
     /** PartNo와 이름이 일치하는 액터 선택 */
     void SelectActorByPartNo(const FString& PartNo);
+
+    void OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Item);
     
     // 이미지 유무 캐싱
     void CacheImageExistence();
