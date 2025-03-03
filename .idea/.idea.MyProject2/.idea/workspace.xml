@@ -14,7 +14,6 @@
       <change beforePath="$PROJECT_DIR$/.idea/.idea.MyProject2/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.MyProject2/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Source/MyProject2/Private/UI/LevelBasedTreeView.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/Source/MyProject2/Private/UI/LevelBasedTreeView.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Source/MyProject2/Public/UI/LevelBasedTreeView.h" beforeDir="false" afterPath="$PROJECT_DIR$/Source/MyProject2/Public/UI/LevelBasedTreeView.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Source/MyProject2Editor/Private/MyProject2Editor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/Source/MyProject2Editor/Private/MyProject2Editor.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -28,7 +27,15 @@
     <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="cidr-memory-view://1" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///dummy.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Source/MyProject2/Public/UI/LevelBasedTreeView.h" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="MetaFilesCheckinStateConfiguration" checkMetaFiles="true" />
@@ -45,6 +52,8 @@
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
     &quot;C++ Project.MyProject2.executor&quot;: &quot;Debug&quot;,
+    &quot;Notification.DisplayName-DoNotAsk-Rider&quot;: &quot;Rider&quot;,
+    &quot;Notification.DoNotAsk-Rider&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;master&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
@@ -488,7 +497,11 @@
       <workItem from="1740877569445" duration="438000" />
       <workItem from="1740878039561" duration="622000" />
       <workItem from="1740878771387" duration="3589000" />
-      <workItem from="1740885569291" duration="2099000" />
+      <workItem from="1740885569291" duration="7432000" />
+      <workItem from="1740966747567" duration="118000" />
+      <workItem from="1740966906473" duration="1763000" />
+      <workItem from="1740968784278" duration="465000" />
+      <workItem from="1740969287070" duration="4292000" />
     </task>
     <servers />
   </component>

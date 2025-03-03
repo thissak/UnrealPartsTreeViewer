@@ -2,6 +2,7 @@
 
 #include "MyProject2/Public/UI/LevelBasedTreeView.h"
 #include "SlateOptMacros.h"
+#include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
@@ -12,6 +13,15 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
 {
     MaxLevel = 0;
     
+    // 이미지 브러시 초기화 - 완전한 설정으로 생성
+    FSlateBrush* InitialBrush = new FSlateBrush();
+    InitialBrush->DrawAs = ESlateBrushDrawType::NoDrawType;  // 초기 상태에서는 그리지 않음
+    InitialBrush->Tiling = ESlateBrushTileType::NoTile;
+    InitialBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
+    InitialBrush->ImageSize = FVector2D(400, 300);  // 초기 크기 설정
+    
+    CurrentImageBrush = MakeShareable(InitialBrush);
+    
     // 위젯 구성
     ChildSlot
     [
@@ -20,6 +30,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
         .TreeItemsSource(&AllRootItems)
         .OnGenerateRow(this, &SLevelBasedTreeView::OnGenerateRow)
         .OnGetChildren(this, &SLevelBasedTreeView::OnGetChildren)
+        .OnSelectionChanged(this, &SLevelBasedTreeView::OnSelectionChanged)
         .HeaderRow
         (
             SNew(SHeaderRow)
@@ -158,6 +169,40 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetMetadataWidget()
     return MetadataText;
 }
 
+// 이미지 위젯 반환 함수 구현
+TSharedRef<SWidget> SLevelBasedTreeView::GetImageWidget()
+{
+    // 이미지 박스 크기 설정 (고정된 크기)
+    const float ImageWidth = 300.0f;
+    const float ImageHeight = 200.0f;
+
+    // 이미지 위젯 생성 (SImage 대신 SBorder 사용)
+    TSharedRef<SBorder> ImageBorder = SNew(SBorder)
+        .BorderImage(FCoreStyle::Get().GetBrush("NoBorder"))
+        .Padding(0)
+        .HAlign(HAlign_Center)
+        .VAlign(VAlign_Center)
+        [
+            SAssignNew(ItemImageWidget, SImage)
+            .DesiredSizeOverride(FVector2D(ImageWidth, ImageHeight))
+            .Image(CurrentImageBrush.Get())
+        ];
+
+    return SNew(SBox)
+        .WidthOverride(ImageWidth)
+        .HeightOverride(ImageHeight)
+        .HAlign(HAlign_Center)
+        .VAlign(VAlign_Center)
+        [
+            SNew(SScaleBox)
+            .Stretch(EStretch::ScaleToFit)
+            .StretchDirection(EStretchDirection::Both)
+            [
+                ImageBorder
+            ]
+        ];
+}
+
 // 선택된 항목의 메타데이터를 텍스트로 반환하는 메서드
 FText SLevelBasedTreeView::GetSelectedItemMetadata() const
 {
@@ -205,7 +250,7 @@ FText SLevelBasedTreeView::GetSelectedItemMetadata() const
     return FText::FromString(MetadataText);
 }
 
-// LevelBasedTreeView.cpp 파일에서
+// 안전한 문자열 반환 함수
 FString SLevelBasedTreeView::GetSafeString(const FString& InStr) const
 {
     return InStr.IsEmpty() ? TEXT("N/A") : InStr;
@@ -213,9 +258,67 @@ FString SLevelBasedTreeView::GetSafeString(const FString& InStr) const
 
 void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESelectInfo::Type SelectInfo)
 {
-    // 선택 변경 시 처리할 작업 (필요한 경우)
-    // GetSelectedItemMetadata() 메서드는 TAttribute를 통해 자동으로 호출되므로
-    // 여기에 특별한 작업이 필요 없음
+    // 선택 변경 시 이미지 업데이트
+    if (Item.IsValid())
+    {
+        UpdateSelectedItemImage();
+    }
+}
+
+// 선택된 항목에 따라 이미지 업데이트 함수 구현
+void SLevelBasedTreeView::UpdateSelectedItemImage()
+{
+    // 선택된 항목 가져오기
+    TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
+    
+    if (SelectedItems.Num() == 0 || !ItemImageWidget.IsValid())
+    {
+        return;
+    }
+    
+    TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
+    FString PartNoStr = SelectedItem->PartNo;
+    
+    // 일관된 파일명 패턴 사용: aaa_bbb_ccc_PARTNUMBER
+    FString AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNoStr);
+    
+    // 에셋 로드 전에 새 브러시 생성
+    FSlateBrush* NewBrush = new FSlateBrush();
+    NewBrush->DrawAs = ESlateBrushDrawType::Image;
+    NewBrush->Tiling = ESlateBrushTileType::NoTile;
+    NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
+    
+    // 에셋 로드 시도
+    UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
+    
+    // 이미지 설정
+    if (Texture)
+    {
+        UE_LOG(LogTemp, Display, TEXT("Found texture asset: %s with size %d x %d"), 
+            *AssetPath, Texture->GetSizeX(), Texture->GetSizeY());
+            
+        // 새 브러시에 텍스처 설정
+        NewBrush->SetResourceObject(Texture);
+        NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+        
+        // 현재 브러시를 새 브러시로 교체
+        CurrentImageBrush = MakeShareable(NewBrush);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No texture asset found at path: %s"), *AssetPath);
+        
+        // 비어있는 브러시 생성
+        NewBrush->SetResourceObject(nullptr);
+        NewBrush->ImageSize = FVector2D(400, 300);
+        NewBrush->DrawAs = ESlateBrushDrawType::NoDrawType;
+        
+        // 현재 브러시를 빈 브러시로 교체
+        CurrentImageBrush = MakeShareable(NewBrush);
+    }
+    
+    // 이미지 위젯에 새 브러시 설정
+    ItemImageWidget->SetImage(CurrentImageBrush.Get());
 }
 
 void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& ExcelData, int32 PartNoColIdx, int32 NextPartColIdx, int32 LevelColIdx)
@@ -395,7 +498,7 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 // 트리뷰 위젯 생성 헬퍼 함수
-void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr<SWidget>& OutMetadataWidget,const FString& ExcelFilePath)
+void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr<SWidget>& OutMetadataWidget, const FString& ExcelFilePath)
 {
     // SLevelBasedTreeView 인스턴스 생성
     TSharedPtr<SLevelBasedTreeView> TreeView = SNew(SLevelBasedTreeView)
@@ -403,12 +506,47 @@ void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr
     
     OutTreeViewWidget = TreeView;
     
-    // 메타데이터 위젯 생성
+    // 메타데이터 위젯에 이미지 위젯 추가
     OutMetadataWidget = SNew(SBorder)
         .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
         .Padding(FMargin(4.0f))
         [
             SNew(SVerticalBox)
+            
+            // 이미지 섹션 추가
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(2)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString("Item Image"))
+                .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
+            ]
+            
+            // 이미지 위젯 추가
+            + SVerticalBox::Slot()
+            .AutoHeight()  // 또는 적절한 높이 지정
+            .Padding(2)
+            [
+                SNew(SBorder)
+                .BorderImage(FAppStyle::GetBrush("ToolPanel.DarkGroupBorder"))
+                .Padding(FMargin(4.0f))
+                [
+                    TreeView->GetImageWidget()
+                ]
+            ]
+
+            // 분리선 추가
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(FMargin(2, 28))
+            [
+                SNew(SSeparator)
+                .Thickness(2.0f)
+                .SeparatorImage(FAppStyle::GetBrush("Menu.Separator"))
+            ]
+            
+            // 메타데이터 섹션 헤더
             + SVerticalBox::Slot()
             .AutoHeight()
             .Padding(2)
@@ -417,6 +555,8 @@ void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr
                 .Text(FText::FromString("Item Details"))
                 .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
             ]
+            
+            // 메타데이터 내용
             + SVerticalBox::Slot()
             .FillHeight(1.0f)
             .Padding(2)
