@@ -483,8 +483,7 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
             .Padding(FMargin(4, 0))
             [
                 SNew(STextBlock)
-                .Text(FText::Format(NSLOCTEXT("LevelBasedTreeView", "PartNoWithLevel", "{0} (Lv.{1})"), 
-                                   FText::FromString(Item->PartNo), FText::AsNumber(Item->Level)))
+                .Text(FText::FromString(Item->PartNo))
             ]
         ];
 }
