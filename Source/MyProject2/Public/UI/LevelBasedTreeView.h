@@ -79,6 +79,8 @@ public:
     // 선택된 항목 이미지 업데이트
     void UpdateSelectedItemImage();
 
+    void ExpandItemRecursively(TSharedPtr<FPartTreeItem> Item, bool bExpand);
+
 private:
     // 트리뷰 위젯
     TSharedPtr<STreeView<TSharedPtr<FPartTreeItem>>> TreeView;

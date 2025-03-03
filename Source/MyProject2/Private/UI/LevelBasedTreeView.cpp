@@ -27,19 +27,19 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     ChildSlot
     [
         SAssignNew(TreeView, STreeView<TSharedPtr<FPartTreeItem>>)
-        .ItemHeight(24.0f)
-        .TreeItemsSource(&AllRootItems)
-        .OnGenerateRow(this, &SLevelBasedTreeView::OnGenerateRow)
-        .OnGetChildren(this, &SLevelBasedTreeView::OnGetChildren)
-        .OnSelectionChanged(this, &SLevelBasedTreeView::OnSelectionChanged)
-        .OnContextMenuOpening(this, &SLevelBasedTreeView::OnContextMenuOpening)
-        .HeaderRow
-        (
-            SNew(SHeaderRow)
-            + SHeaderRow::Column("PartNo")
-            .DefaultLabel(FText::FromString("Part No"))
-            .FillWidth(1.0f)
-        )
+            .ItemHeight(24.0f)
+            .TreeItemsSource(&AllRootItems)
+            .OnGenerateRow(this, &SLevelBasedTreeView::OnGenerateRow)
+            .OnGetChildren(this, &SLevelBasedTreeView::OnGetChildren)
+            .OnSelectionChanged(this, &SLevelBasedTreeView::OnSelectionChanged)
+            .OnContextMenuOpening(this, &SLevelBasedTreeView::OnContextMenuOpening)
+            .HeaderRow
+            (
+                SNew(SHeaderRow)
+                + SHeaderRow::Column("PartNo")
+                .DefaultLabel(FText::FromString("Part No"))
+                .FillWidth(1.0f)
+            )
     ];
     
     // 엑셀 파일 로드 및 트리뷰 구성
@@ -131,39 +131,120 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
 {
     FMenuBuilder MenuBuilder(true, nullptr);
     
+    // 현재 선택된 항목 가져오기
+    TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
+    TSharedPtr<FPartTreeItem> SelectedItem = (SelectedItems.Num() > 0) ? SelectedItems[0] : nullptr;
+    
     MenuBuilder.BeginSection("TreeItemActions", FText::FromString(TEXT("메뉴")));
     {
+        // 상세 정보 보기 (선택된 항목이 있을 때만 활성화)
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("상세 정보 보기")),
             FText::FromString(TEXT("선택한 항목의 상세 정보를 봅니다")),
             FSlateIcon(),
-            FUIAction(FExecuteAction::CreateLambda([]() { /* 비어있음 */ }))
+            FUIAction(
+                FExecuteAction::CreateLambda([this]() {
+                    // 선택된 항목의 세부 정보를 로그로 출력
+                    TArray<TSharedPtr<FPartTreeItem>> Items = TreeView->GetSelectedItems();
+                    if (Items.Num() > 0)
+                    {
+                        TSharedPtr<FPartTreeItem> Item = Items[0];
+                        FString DetailsInfo = FString::Printf(
+                            TEXT("Part Details - PartNo: %s, Level: %d, Type: %s, Nomenclature: %s"),
+                            *Item->PartNo, Item->Level, *Item->Type, *Item->Nomenclature
+                        );
+                        UE_LOG(LogTemp, Display, TEXT("%s"), *DetailsInfo);
+                        
+                        // 이미 메타데이터 위젯에 정보가 표시되므로 추가 작업은 필요 없음
+                    }
+                }),
+                FCanExecuteAction::CreateLambda([SelectedItem]() { 
+                    // 선택된 항목이 있을 때만 활성화
+                    return SelectedItem.IsValid(); 
+                })
+            )
         );
         
+        // 이미지 보기 (이미지가 있는 항목인 경우에만 활성화)
+        bool bHasImage = SelectedItem.IsValid() && PartsWithImageSet.Contains(SelectedItem->PartNo);
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("이미지 보기")),
             FText::FromString(TEXT("선택한 항목의 이미지를 봅니다")),
             FSlateIcon(),
-            FUIAction(FExecuteAction::CreateLambda([]() { /* 비어있음 */ }))
+            FUIAction(
+                FExecuteAction::CreateLambda([this]() {
+                    // 선택된 항목의 이미지 업데이트 (이미지가 있는 경우)
+                    UpdateSelectedItemImage();
+                    UE_LOG(LogTemp, Display, TEXT("이미지 업데이트 완료"));
+                }),
+                FCanExecuteAction::CreateLambda([bHasImage]() { 
+                    // 이미지가 있는 경우에만 활성화
+                    return bHasImage; 
+                })
+            )
         );
         
+        // 선택 노드 펼치기 (선택된 항목이 있을 때만 활성화)
         MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("모두 펼치기")),
-            FText::FromString(TEXT("모든 트리 항목을 펼칩니다")),
+            FText::FromString(TEXT("하위 항목 모두 펼치기")),
+            FText::FromString(TEXT("선택한 항목의 모든 하위 항목을 펼칩니다")),
             FSlateIcon(),
-            FUIAction(FExecuteAction::CreateLambda([]() { /* 비어있음 */ }))
+            FUIAction(
+                FExecuteAction::CreateLambda([this]() {
+                    TArray<TSharedPtr<FPartTreeItem>> Items = TreeView->GetSelectedItems();
+                    if (Items.Num() > 0)
+                    {
+                        ExpandItemRecursively(Items[0], true);
+                        UE_LOG(LogTemp, Display, TEXT("선택한 항목의 하위 항목이 모두 펼쳐졌습니다"));
+                    }
+                }),
+                FCanExecuteAction::CreateLambda([SelectedItem]() { 
+                    // 선택된 항목이 있고 자식이 있을 때만 활성화
+                    return SelectedItem.IsValid() && SelectedItem->Children.Num() > 0; 
+                })
+            )
         );
         
+        // 선택 노드 접기 (선택된 항목이 있을 때만 활성화)
         MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("모두 접기")),
-            FText::FromString(TEXT("모든 트리 항목을 접습니다")),
+            FText::FromString(TEXT("하위 항목 모두 접기")),
+            FText::FromString(TEXT("선택한 항목의 모든 하위 항목을 접습니다")),
             FSlateIcon(),
-            FUIAction(FExecuteAction::CreateLambda([]() { /* 비어있음 */ }))
+            FUIAction(
+                FExecuteAction::CreateLambda([this]() {
+                    TArray<TSharedPtr<FPartTreeItem>> Items = TreeView->GetSelectedItems();
+                    if (Items.Num() > 0)
+                    {
+                        ExpandItemRecursively(Items[0], false);
+                        UE_LOG(LogTemp, Display, TEXT("선택한 항목의 하위 항목이 모두 접혔습니다"));
+                    }
+                }),
+                FCanExecuteAction::CreateLambda([SelectedItem]() { 
+                    // 선택된 항목이 있고 자식이 있을 때만 활성화
+                    return SelectedItem.IsValid() && SelectedItem->Children.Num() > 0; 
+                })
+            )
         );
     }
     MenuBuilder.EndSection();
 
     return MenuBuilder.MakeWidget();
+}
+
+// 트리 항목과 그 하위 항목들을 재귀적으로 펼치거나 접는 함수
+void SLevelBasedTreeView::ExpandItemRecursively(TSharedPtr<FPartTreeItem> Item, bool bExpand)
+{
+    if (!Item.IsValid() || !TreeView.IsValid())
+        return;
+        
+    // 현재 항목 펼치기/접기
+    TreeView->SetItemExpansion(Item, bExpand);
+    
+    // 자식 항목들도 재귀적으로 펼치기/접기
+    for (auto& Child : Item->Children)
+    {
+        ExpandItemRecursively(Child, bExpand);
+    }
 }
 
 bool SLevelBasedTreeView::ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows)
