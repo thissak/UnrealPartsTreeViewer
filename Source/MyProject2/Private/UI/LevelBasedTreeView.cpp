@@ -6,6 +6,7 @@
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
@@ -45,6 +46,80 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     {
         BuildTreeView(InArgs._ExcelFilePath);
     }
+}
+
+// 빈 브러시 설정을 위한 헬퍼 함수
+void SLevelBasedTreeView::SetupEmptyBrush(FSlateBrush* Brush)
+{
+    Brush->SetResourceObject(nullptr);
+    Brush->ImageSize = FVector2D(400, 300);
+    Brush->DrawAs = ESlateBrushDrawType::NoDrawType;
+    
+    // 현재 브러시를 빈 브러시로 교체
+    CurrentImageBrush = MakeShareable(Brush);
+}
+
+// 이미지 캐싱 로직 수정
+void SLevelBasedTreeView::CacheImageExistence()
+{
+    UE_LOG(LogTemp, Display, TEXT("CacheImageExistence 시작"));
+    
+    // Set 초기화
+    PartsWithImageSet.Empty();
+    
+    try
+    {
+        // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
+        const FString ImageDir = TEXT("/Game/00_image");
+        UE_LOG(LogTemp, Display, TEXT("이미지 디렉토리 경로: %s"), *ImageDir);
+        
+        // 에셋 레지스트리 활용
+        TArray<FAssetData> AssetList;
+        FARFilter Filter;
+        
+        // ClassNames 대신 ClassPaths 사용
+        Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
+        Filter.PackagePaths.Add(*ImageDir);
+        
+        // 에셋 레지스트리에서 모든 텍스처 에셋 찾기
+        FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+        AssetRegistryModule.Get().GetAssets(Filter, AssetList);
+        UE_LOG(LogTemp, Display, TEXT("GetAssets 호출 완료. 찾은 에셋 수: %d"), AssetList.Num());
+        
+        // 에셋 처리
+        for (const FAssetData& Asset : AssetList)
+        {
+            FString AssetName = Asset.AssetName.ToString();
+            
+            // 언더바로 문자열 분리
+            TArray<FString> Parts;
+            AssetName.ParseIntoArray(Parts, TEXT("_"));
+            
+            // 언더바로 구분된 부분이 4개 이상인지 확인 (최소 인덱스 3이 존재하는지)
+            if (Parts.Num() >= 4)
+            {
+                // 3번째 인덱스가 파트 번호
+                FString PartNo = Parts[3];
+                
+                // Set에 파트 번호 추가
+                PartsWithImageSet.Add(PartNo);
+            }
+        }
+    }
+    catch (const std::exception&)
+    {
+        UE_LOG(LogTemp, Error, TEXT("에셋 레지스트리 처리 중 std::exception 에러"));
+    }
+    catch (...)
+    {
+        UE_LOG(LogTemp, Error, TEXT("에셋 레지스트리 처리 중 알 수 없는 에러 발생"));
+    }
+    
+    // 결과 로그 출력
+    UE_LOG(LogTemp, Display, TEXT("이미지 있는 노드 갯수: %d / 전체 노드 갯수: %d"), 
+           PartsWithImageSet.Num(), PartNoToItemMap.Num());
+    
+    UE_LOG(LogTemp, Display, TEXT("CacheImageExistence 완료"));
 }
 
 bool SLevelBasedTreeView::ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows)
@@ -102,6 +177,7 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     AllRootItems.Empty();
     PartNoToItemMap.Empty();
     LevelToItemsMap.Empty();
+    PartsWithImageSet.Empty();
     MaxLevel = 0;
     
     // CSV 파일 읽기
@@ -145,6 +221,9 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     // 2단계: 트리 구조 구축
     BuildTreeStructure();
     
+    // 이미지 존재 여부 캐싱 
+    CacheImageExistence();
+    
     // 트리뷰 갱신
     if (TreeView.IsValid())
     {
@@ -155,6 +234,24 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
         {
             TreeView->SetItemExpansion(RootItem, true);
         }
+    }
+
+    // 노드 갯수 로그 출력 추가
+    int32 TotalNodeCount = 0;
+    for (const auto& LevelPair : LevelToItemsMap)
+    {
+        TotalNodeCount += LevelPair.Value.Num();
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("트리 노드 총 갯수: %d"), TotalNodeCount);
+    UE_LOG(LogTemp, Display, TEXT("루트 노드 갯수: %d"), AllRootItems.Num());
+    
+    // 각 레벨별 노드 갯수도 출력
+    for (int32 Level = 0; Level <= MaxLevel; ++Level)
+    {
+        const TArray<TSharedPtr<FPartTreeItem>>* LevelItems = LevelToItemsMap.Find(Level);
+        int32 LevelNodeCount = LevelItems ? LevelItems->Num() : 0;
+        UE_LOG(LogTemp, Display, TEXT("레벨 %d 노드 갯수: %d"), Level, LevelNodeCount);
     }
     
     return AllRootItems.Num() > 0;
@@ -279,42 +376,40 @@ void SLevelBasedTreeView::UpdateSelectedItemImage()
     TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
     FString PartNoStr = SelectedItem->PartNo;
     
-    // 일관된 파일명 패턴 사용: aaa_bbb_ccc_PARTNUMBER
-    FString AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNoStr);
-    
-    // 에셋 로드 전에 새 브러시 생성
+    // 새 브러시 생성
     FSlateBrush* NewBrush = new FSlateBrush();
     NewBrush->DrawAs = ESlateBrushDrawType::Image;
     NewBrush->Tiling = ESlateBrushTileType::NoTile;
     NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
     
-    // 에셋 로드 시도
-    UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
-    
-    // 이미지 설정
-    if (Texture)
+    // Set을 확인하여 이미지가 있는지 미리 확인
+    if (PartsWithImageSet.Contains(PartNoStr))
     {
-        UE_LOG(LogTemp, Display, TEXT("Found texture asset: %s with size %d x %d"), 
-            *AssetPath, Texture->GetSizeX(), Texture->GetSizeY());
-            
-        // 새 브러시에 텍스처 설정
-        NewBrush->SetResourceObject(Texture);
-        NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+        // 이미지 경로
+        FString AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNoStr);
         
-        // 현재 브러시를 새 브러시로 교체
-        CurrentImageBrush = MakeShareable(NewBrush);
+        // 에셋 로드 시도
+        UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
+        
+        if (Texture)
+        {
+            // 새 브러시에 텍스처 설정
+            NewBrush->SetResourceObject(Texture);
+            NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+            
+            // 현재 브러시를 새 브러시로 교체
+            CurrentImageBrush = MakeShareable(NewBrush);
+        }
+        else
+        {
+            // 이미지가 로드되지 않음 - 빈 브러시 설정
+            SetupEmptyBrush(NewBrush);
+        }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("No texture asset found at path: %s"), *AssetPath);
-        
-        // 비어있는 브러시 생성
-        NewBrush->SetResourceObject(nullptr);
-        NewBrush->ImageSize = FVector2D(400, 300);
-        NewBrush->DrawAs = ESlateBrushDrawType::NoDrawType;
-        
-        // 현재 브러시를 빈 브러시로 교체
-        CurrentImageBrush = MakeShareable(NewBrush);
+        // 이미지가 없음 - 빈 브러시 설정
+        SetupEmptyBrush(NewBrush);
     }
     
     // 이미지 위젯에 새 브러시 설정
@@ -473,6 +568,13 @@ void SLevelBasedTreeView::BuildTreeStructure()
 
 TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeItem> Item, const TSharedRef<STableViewBase>& OwnerTable)
 {
+    // 직접 PartsWithImageSet에서 확인하여 색상 결정
+    bool hasImage = PartsWithImageSet.Contains(Item->PartNo);
+    
+    // 이미지가 있는 노드는 빨간색으로 표시
+    FSlateColor TextColor = hasImage ? 
+        FSlateColor(FLinearColor::Red) : FSlateColor(FLinearColor::White);
+        
     // 각 트리 항목에 대한 행 위젯 생성
     return SNew(STableRow<TSharedPtr<FPartTreeItem>>, OwnerTable)
         [
@@ -484,6 +586,7 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
             [
                 SNew(STextBlock)
                 .Text(FText::FromString(Item->PartNo))
+                .ColorAndOpacity(TextColor) // 색상 적용
             ]
         ];
 }
@@ -529,43 +632,43 @@ void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr
             [
                 SNew(SBorder)
                 .BorderImage(FAppStyle::GetBrush("ToolPanel.DarkGroupBorder"))
-                .Padding(FMargin(4.0f))
-                [
-                    TreeView->GetImageWidget()
-                ]
-            ]
+               .Padding(FMargin(4.0f))
+               [
+                   TreeView->GetImageWidget()
+               ]
+           ]
 
-            // 분리선 추가
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(FMargin(2, 28))
-            [
-                SNew(SSeparator)
-                .Thickness(2.0f)
-                .SeparatorImage(FAppStyle::GetBrush("Menu.Separator"))
-            ]
-            
-            // 메타데이터 섹션 헤더
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(2)
-            [
-                SNew(STextBlock)
-                .Text(FText::FromString("Item Details"))
-                .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
-            ]
-            
-            // 메타데이터 내용
-            + SVerticalBox::Slot()
-            .FillHeight(1.0f)
-            .Padding(2)
-            [
-                SNew(SScrollBox)
-                + SScrollBox::Slot()
-                [
-                    // 메타데이터 내용 표시를 위한 기본 텍스트
-                    TreeView->GetMetadataWidget()
-                ]
-            ]
-        ];
+           // 분리선 추가
+           + SVerticalBox::Slot()
+           .AutoHeight()
+           .Padding(FMargin(2, 28))
+           [
+               SNew(SSeparator)
+               .Thickness(2.0f)
+               .SeparatorImage(FAppStyle::GetBrush("Menu.Separator"))
+           ]
+           
+           // 메타데이터 섹션 헤더
+           + SVerticalBox::Slot()
+           .AutoHeight()
+           .Padding(2)
+           [
+               SNew(STextBlock)
+               .Text(FText::FromString("Item Details"))
+               .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
+           ]
+           
+           // 메타데이터 내용
+           + SVerticalBox::Slot()
+           .FillHeight(1.0f)
+           .Padding(2)
+           [
+               SNew(SScrollBox)
+               + SScrollBox::Slot()
+               [
+                   // 메타데이터 내용 표시를 위한 기본 텍스트
+                  TreeView->GetMetadataWidget()
+              ]
+          ]
+      ];
 }

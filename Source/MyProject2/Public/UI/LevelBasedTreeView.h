@@ -9,6 +9,7 @@
 #include "HAL/PlatformFilemanager.h"
 #include "Widgets/Images/SImage.h"
 #include "Engine/Texture2D.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 
 // 트리 아이템 데이터 구조체
 struct FPartTreeItem
@@ -44,6 +45,7 @@ struct FPartTreeItem
         , Nomenclature(TEXT(""))
         , InstanceIDTotalAllDB(TEXT(""))
         , Qty(TEXT(""))
+
     {
     }
 };
@@ -76,7 +78,7 @@ public:
     
     // 선택된 항목 이미지 업데이트
     void UpdateSelectedItemImage();
-       
+
 private:
     // 트리뷰 위젯
     TSharedPtr<STreeView<TSharedPtr<FPartTreeItem>>> TreeView;
@@ -90,6 +92,15 @@ private:
     // 이미지 관련 멤버
     TSharedPtr<FSlateBrush> CurrentImageBrush;
     TSharedPtr<SImage> ItemImageWidget;
+
+    // 이미지가 있는 파트 번호 집합
+    TSet<FString> PartsWithImageSet;
+    
+    // 이미지 유무 캐싱
+    void CacheImageExistence();
+    
+    // 빈 브러시 설정 헬퍼 함수
+    void SetupEmptyBrush(FSlateBrush* Brush);
     
     // CSV 파일 읽기
     bool ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows);
