@@ -17,13 +17,15 @@ void FMyProject2EditorModule::StartupModule()
 
 void FMyProject2EditorModule::ShutdownModule()
 {
+    // 도구 메뉴 등록 해제
+    UToolMenus::UnregisterOwner(this);
+
+    // 윈도우 참조 해제
     if (TreeViewWindow.IsValid())
     {
-        TreeViewWindow->RequestDestroyWindow();
-        TreeViewWindow.Reset();
+        // 모듈 내 윈도우 참조 제거
+        TreeViewWindow = nullptr;
     }
-
-    UToolMenus::UnregisterOwner(this);
 }
 
 void FMyProject2EditorModule::ResisterMenu()
