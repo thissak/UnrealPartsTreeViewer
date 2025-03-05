@@ -109,6 +109,9 @@ private:
     // 이미지 유무 캐싱
     void CacheImageExistence();
     
+    // 파트 번호별 이미지 경로 맵
+    TMap<FString, FString> PartNoToImagePathMap;
+    
     // 빈 브러시 설정 헬퍼 함수
     void SetupEmptyBrush(FSlateBrush* Brush);
     

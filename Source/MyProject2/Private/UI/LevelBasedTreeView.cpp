@@ -128,13 +128,14 @@ void SLevelBasedTreeView::OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Ite
     }
 }
 
-// 이미지 캐싱 로직 수정
+// CacheImageExistence 함수 수정 - 실제 에셋 경로를 저장
 void SLevelBasedTreeView::CacheImageExistence()
 {
     UE_LOG(LogTemp, Display, TEXT("CacheImageExistence 시작"));
     
-    // Set 초기화
+    // Set 및 맵 초기화
     PartsWithImageSet.Empty();
+    PartNoToImagePathMap.Empty(); // 파트 번호별 실제 이미지 경로를 저장할 맵 추가
     
     try
     {
@@ -159,12 +160,13 @@ void SLevelBasedTreeView::CacheImageExistence()
         for (const FAssetData& Asset : AssetList)
         {
             FString AssetName = Asset.AssetName.ToString();
+            FString AssetPath = Asset.ObjectPath.ToString();
             
             // 언더바로 문자열 분리
             TArray<FString> Parts;
             AssetName.ParseIntoArray(Parts, TEXT("_"));
             
-            // 언더바로 구분된 부분이 4개 이상인지 확인 (최소 인덱스 3이 존재하는지)
+            // 언더바로 구분된 부분이 4개 이상인지 확인
             if (Parts.Num() >= 4)
             {
                 // 3번째 인덱스가 파트 번호
@@ -174,8 +176,10 @@ void SLevelBasedTreeView::CacheImageExistence()
                 if(PartNoToItemMap.Contains(PartNo))
                 {
                     PartsWithImageSet.Add(PartNo);
+                    // 실제 에셋 경로 저장
+                    PartNoToImagePathMap.Add(PartNo, AssetPath);
+                    UE_LOG(LogTemp, Display, TEXT("파트 번호 '%s'에 대한 이미지 경로 저장: %s"), *PartNo, *AssetPath);
                 }
-                    
             }
         }
     }
@@ -193,6 +197,86 @@ void SLevelBasedTreeView::CacheImageExistence()
            PartsWithImageSet.Num(), PartNoToItemMap.Num());
     
     UE_LOG(LogTemp, Display, TEXT("CacheImageExistence 완료"));
+}
+
+// UpdateSelectedItemImage 함수 수정 - 저장된 실제 이미지 경로 사용
+void SLevelBasedTreeView::UpdateSelectedItemImage()
+{
+    // 선택된 항목 가져오기
+    TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
+    
+    if (SelectedItems.Num() == 0 || !ItemImageWidget.IsValid())
+    {
+        return;
+    }
+    
+    TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
+    FString PartNoStr = SelectedItem->PartNo;
+    
+    // 새 브러시 생성
+    FSlateBrush* NewBrush = new FSlateBrush();
+    NewBrush->DrawAs = ESlateBrushDrawType::Image;
+    NewBrush->Tiling = ESlateBrushTileType::NoTile;
+    NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
+    
+    // Set을 확인하여 이미지가 있는지 미리 확인
+    if (PartsWithImageSet.Contains(PartNoStr))
+    {
+        // 저장된 실제 이미지 경로 사용
+        FString* AssetPathPtr = PartNoToImagePathMap.Find(PartNoStr);
+        FString AssetPath;
+        
+        if (AssetPathPtr)
+        {
+            AssetPath = *AssetPathPtr;
+            UE_LOG(LogTemp, Display, TEXT("저장된 이미지 경로 사용: %s"), *AssetPath);
+        }
+        else
+        {
+            // 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
+            AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNoStr);
+            UE_LOG(LogTemp, Warning, TEXT("저장된 이미지 경로가 없어 추정 경로 사용: %s"), *AssetPath);
+        }
+        
+        // 에셋 로드 시도
+        UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
+        
+        if (Texture)
+        {
+            // 새 브러시에 텍스처 설정
+            NewBrush->SetResourceObject(Texture);
+            NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+            
+            // 현재 브러시를 새 브러시로 교체
+            CurrentImageBrush = MakeShareable(NewBrush);
+            
+            UE_LOG(LogTemp, Display, TEXT("이미지 로드 성공: %s"), *AssetPath);
+        }
+        else
+        {
+            // 이미지가 로드되지 않음 - 빈 브러시 설정
+            SetupEmptyBrush(NewBrush);
+            UE_LOG(LogTemp, Error, TEXT("이미지 로드 실패: %s"), *AssetPath);
+            
+            // 파일 존재 여부 확인 (디버깅 목적)
+            FString ContentDir = FPaths::ProjectContentDir();
+            FString RelativePath = AssetPath.Replace(TEXT("/Game/"), TEXT(""));
+            FString AbsolutePath = FPaths::Combine(ContentDir, RelativePath) + TEXT(".uasset");
+            
+            bool bFileExists = FPlatformFileManager::Get().GetPlatformFile().FileExists(*AbsolutePath);
+            UE_LOG(LogTemp, Error, TEXT("파일 존재 여부: %s, 경로: %s"), 
+                bFileExists ? TEXT("있음") : TEXT("없음"), *AbsolutePath);
+        }
+    }
+    else
+    {
+        // 이미지가 없음 - 빈 브러시 설정
+        SetupEmptyBrush(NewBrush);
+        UE_LOG(LogTemp, Verbose, TEXT("파트 '%s'의 이미지가 없습니다"), *PartNoStr);
+    }
+    
+    // 이미지 위젯에 새 브러시 설정
+    ItemImageWidget->SetImage(CurrentImageBrush.Get());
 }
 
 TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
@@ -595,60 +679,6 @@ void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESe
         UpdateSelectedItemImage();
 
     }
-}
-
-// 선택된 항목에 따라 이미지 업데이트 함수 구현
-void SLevelBasedTreeView::UpdateSelectedItemImage()
-{
-    // 선택된 항목 가져오기
-    TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
-    
-    if (SelectedItems.Num() == 0 || !ItemImageWidget.IsValid())
-    {
-        return;
-    }
-    
-    TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
-    FString PartNoStr = SelectedItem->PartNo;
-    
-    // 새 브러시 생성
-    FSlateBrush* NewBrush = new FSlateBrush();
-    NewBrush->DrawAs = ESlateBrushDrawType::Image;
-    NewBrush->Tiling = ESlateBrushTileType::NoTile;
-    NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
-    
-    // Set을 확인하여 이미지가 있는지 미리 확인
-    if (PartsWithImageSet.Contains(PartNoStr))
-    {
-        // 이미지 경로
-        FString AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNoStr);
-        
-        // 에셋 로드 시도
-        UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
-        
-        if (Texture)
-        {
-            // 새 브러시에 텍스처 설정
-            NewBrush->SetResourceObject(Texture);
-            NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
-            
-            // 현재 브러시를 새 브러시로 교체
-            CurrentImageBrush = MakeShareable(NewBrush);
-        }
-        else
-        {
-            // 이미지가 로드되지 않음 - 빈 브러시 설정
-            SetupEmptyBrush(NewBrush);
-        }
-    }
-    else
-    {
-        // 이미지가 없음 - 빈 브러시 설정
-        SetupEmptyBrush(NewBrush);
-    }
-    
-    // 이미지 위젯에 새 브러시 설정
-    ItemImageWidget->SetImage(CurrentImageBrush.Get());
 }
 
 void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& ExcelData, int32 PartNoColIdx, int32 NextPartColIdx, int32 LevelColIdx)
