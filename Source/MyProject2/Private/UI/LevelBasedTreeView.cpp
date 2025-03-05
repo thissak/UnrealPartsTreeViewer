@@ -8,6 +8,7 @@
 #include "Widgets/Text/STextBlock.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Windows/WindowsPlatformApplicationMisc.h"
+#include "Widgets/Input/SSearchBox.h"
 
 #if WITH_EDITOR
 #include "Editor.h"
@@ -22,6 +23,8 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
 {
     MaxLevel = 0;
     bFilteringImageNodes = false;
+	bIsSearching = false;  // 검색 상태 초기화
+	SearchText = "";       // 검색어 초기화
     
     // 이미지 브러시 초기화
     FSlateBrush* InitialBrush = new FSlateBrush();
@@ -112,6 +115,103 @@ void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
     }
 #endif
 }
+
+// 검색 UI 위젯 반환 함수
+TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
+{
+	return SNew(SBorder)
+		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+		.Padding(FMargin(4.0f))
+		[
+			SNew(SVerticalBox)
+            
+			// 검색창 설명 텍스트
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(2)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString("Search Parts"))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
+			]
+            
+			// 검색 입력창
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(2)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.0f)
+				[
+					SNew(SSearchBox)
+					.HintText(FText::FromString("Enter text to search..."))
+					.OnTextChanged(this, &SLevelBasedTreeView::OnSearchTextChanged)
+					.OnTextCommitted(this, &SLevelBasedTreeView::OnSearchTextCommitted)
+				]
+			]
+            
+			// 검색 결과 정보
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(2)
+			[
+				SNew(STextBlock)
+				.Text_Lambda([this]() -> FText {
+					if (bIsSearching && !SearchText.IsEmpty())
+					{
+						return FText::Format(FText::FromString("Found {0} matches for '{1}'"), 
+							FText::AsNumber(SearchResults.Num()), FText::FromString(SearchText));
+					}
+					return FText::GetEmpty();
+				})
+				.Visibility_Lambda([this]() -> EVisibility {
+					return (bIsSearching && !SearchText.IsEmpty()) ? EVisibility::Visible : EVisibility::Collapsed;
+				})
+			]
+		];
+}
+
+// 검색 텍스트 변경 이벤트 핸들러
+void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
+{
+	// 검색어가 변경되면 검색 실행
+	SearchText = InText.ToString();
+	if (SearchText.IsEmpty())
+	{
+		// 검색어가 비었으면 검색 중지
+		bIsSearching = false;
+		// 모든 필터 해제 및 트리뷰 갱신
+		if (bFilteringImageNodes)
+		{
+			ToggleImageFiltering(false);
+		}
+		else
+		{
+			TreeView->RequestTreeRefresh();
+		}
+	}
+	else
+	{
+		// 검색 실행
+		PerformSearch(SearchText);
+	}
+}
+
+// 검색 텍스트 확정 이벤트 핸들러
+void SLevelBasedTreeView::OnSearchTextCommitted(const FText& InText, ETextCommit::Type CommitType)
+{
+	if (CommitType == ETextCommit::OnEnter)
+	{
+		// Enter 키로 검색 실행
+		SearchText = InText.ToString();
+		if (!SearchText.IsEmpty())
+		{
+			PerformSearch(SearchText);
+		}
+	}
+}
+
 
 void SLevelBasedTreeView::OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Item)
 {
@@ -908,13 +1008,41 @@ void SLevelBasedTreeView::BuildTreeStructure()
 
 TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeItem> Item, const TSharedRef<STableViewBase>& OwnerTable)
 {
-    // 직접 PartsWithImageSet에서 확인하여 색상 결정
-    bool hasImage = PartsWithImageSet.Contains(Item->PartNo);
+    // 기본 텍스트 색상과 폰트
+    FSlateColor TextColor = FSlateColor(FLinearColor::White);
+    FSlateFontInfo FontInfo = FCoreStyle::GetDefaultFontStyle("Regular", 9);
     
-    // 이미지가 있는 노드는 빨간색으로 표시
-    FSlateColor TextColor = hasImage ? 
-        FSlateColor(FLinearColor::Red) : FSlateColor(FLinearColor::White);
+    // 검색 중이고 검색어가 있는 경우
+    if (bIsSearching && !SearchText.IsEmpty())
+    {
+        // 직접 검색어로 다시 확인
+        FString LowerSearchText = SearchText.ToLower();
+        FString LowerPartNo = Item->PartNo.ToLower();
+        FString LowerNomenclature = Item->Nomenclature.ToLower();
         
+        bool isSearchMatch = LowerPartNo.Contains(LowerSearchText) || 
+                            LowerNomenclature.Contains(LowerSearchText);
+        
+        if (isSearchMatch)
+        {
+            // 검색 결과 항목: 녹색, 굵은 글씨
+            TextColor = FSlateColor(FLinearColor(0.2f, 0.8f, 0.2f)); // 밝은 녹색
+            FontInfo = FCoreStyle::GetDefaultFontStyle("Bold", 9);
+            
+            // 디버깅 로그
+            UE_LOG(LogTemp, Display, TEXT("검색 결과 색상 적용: %s (검색어: %s)"), 
+                *Item->PartNo, *SearchText);
+        }
+    }
+    else if (!bIsSearching)
+    {
+        // 검색 중이 아닌 경우 이미지 있는 항목은 빨간색
+        if (PartsWithImageSet.Contains(Item->PartNo))
+        {
+            TextColor = FSlateColor(FLinearColor::Red);
+        }
+    }
+    
     // 각 트리 항목에 대한 행 위젯 생성
     return SNew(STableRow<TSharedPtr<FPartTreeItem>>, OwnerTable)
         [
@@ -926,29 +1054,161 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
             [
                 SNew(STextBlock)
                 .Text(FText::FromString(Item->PartNo))
-                .ColorAndOpacity(TextColor) // 색상 적용
+                .ColorAndOpacity(TextColor)
+                .Font(FontInfo)
             ]
         ];
 }
 
 void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<TSharedPtr<FPartTreeItem>>& OutChildren)
 {
-    if (bFilteringImageNodes)
-    {
-        // 이미지가 있는 자식 항목만 필터링
-        for (const auto& Child : Item->Children)
-        {
-            if (PartsWithImageSet.Contains(Child->PartNo) || HasChildWithImage(Child))
-            {
-                OutChildren.Add(Child);
-            }
-        }
-    }
-    else
-    {
-        // 필터링 없이 모든 자식 항목 반환
-        OutChildren = Item->Children;
-    }
+	if (bIsSearching && !SearchText.IsEmpty())
+	{
+		// 검색 중인 경우: 검색 결과에 있는 자식 항목이나 
+		// 검색 결과의 부모 경로에 있는 항목만 표시
+		for (const auto& Child : Item->Children)
+		{
+			if (SearchResults.Contains(Child))
+			{
+				// 직접 검색 결과인 경우
+				OutChildren.Add(Child);
+			}
+			else
+			{
+				// 자식 항목 중에 검색 결과가 있는지 확인
+				bool bHasSearchResultChild = false;
+				for (const auto& Result : SearchResults)
+				{
+					if (IsChildOf(Result, Child))
+					{
+						bHasSearchResultChild = true;
+						break;
+					}
+				}
+                
+				if (bHasSearchResultChild)
+				{
+					OutChildren.Add(Child);
+				}
+			}
+		}
+	}
+	else if (bFilteringImageNodes)
+	{
+		// 이미지 필터링 (기존 코드)
+		for (const auto& Child : Item->Children)
+		{
+			if (PartsWithImageSet.Contains(Child->PartNo) || HasChildWithImage(Child))
+			{
+				OutChildren.Add(Child);
+			}
+		}
+	}
+	else
+	{
+		// 필터링 없이 모든 자식 항목 표시 (기존 코드)
+		OutChildren = Item->Children;
+	}
+}
+
+// 유틸리티 함수 추가: 한 항목이 다른 항목의 자식인지 확인
+bool SLevelBasedTreeView::IsChildOf(const TSharedPtr<FPartTreeItem>& PotentialChild, const TSharedPtr<FPartTreeItem>& PotentialParent)
+{
+	if (!PotentialChild.IsValid() || !PotentialParent.IsValid())
+	{
+		return false;
+	}
+    
+	// 직접적인 자식인지 확인
+	for (const auto& DirectChild : PotentialParent->Children)
+	{
+		if (DirectChild == PotentialChild)
+		{
+			return true;
+		}
+        
+		// 재귀적으로 하위 자식들 확인
+		if (IsChildOf(PotentialChild, DirectChild))
+		{
+			return true;
+		}
+	}
+    
+	return false;
+}
+
+// 검색 실행 함수
+void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
+{
+	// 검색 결과 초기화
+	SearchResults.Empty();
+	bIsSearching = true;
+    
+	// 검색어를 소문자로 변환 (대소문자 구분 없는 검색)
+	FString LowerSearchText = InSearchText.ToLower();
+	UE_LOG(LogTemp, Display, TEXT("검색 시작: '%s'"), *InSearchText);
+    
+	// 모든 항목을 순회하며 검색
+	for (const auto& Pair : PartNoToItemMap)
+	{
+		TSharedPtr<FPartTreeItem> Item = Pair.Value;
+		if (DoesItemMatchSearch(Item, LowerSearchText))
+		{
+			SearchResults.Add(Item);
+		}
+	}
+    
+	UE_LOG(LogTemp, Display, TEXT("검색 결과: %d개 항목 발견"), SearchResults.Num());
+    
+	// 검색 결과가 있으면 첫 번째 결과로 스크롤 및 선택
+	if (SearchResults.Num() > 0)
+	{
+		// 결과 항목의 경로를 펼치고 항목 선택
+		ExpandPathToItem(SearchResults[0]);
+		TreeView->SetItemSelection(SearchResults[0], true);
+		TreeView->RequestScrollIntoView(SearchResults[0]);
+	}
+    
+	// 트리뷰 갱신 (필터링 적용)
+	TreeView->RequestTreeRefresh();
+}
+
+// 항목이 검색어와 일치하는지 확인
+bool SLevelBasedTreeView::DoesItemMatchSearch(const TSharedPtr<FPartTreeItem>& Item, const FString& InSearchText)
+{
+	// 대소문자 구분 없이 검색하기 위해 모든 문자열을 소문자로 변환
+	FString LowerPartNo = Item->PartNo.ToLower();
+	FString LowerType = Item->Type.ToLower();
+	FString LowerNomenclature = Item->Nomenclature.ToLower();
+    
+	// 파트 번호, 유형, 명칭에서 검색
+	return LowerPartNo.Contains(InSearchText) || 
+		   LowerType.Contains(InSearchText) || 
+		   LowerNomenclature.Contains(InSearchText);
+}
+
+// 항목의 경로를 펼치는 함수
+void SLevelBasedTreeView::ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item)
+{
+	// 부모 항목을 찾아 재귀적으로 경로 펼치기
+	TSharedPtr<FPartTreeItem> ParentItem = FindParentItem(Item);
+	if (ParentItem.IsValid())
+	{
+		ExpandPathToItem(ParentItem);
+		TreeView->SetItemExpansion(ParentItem, true);
+	}
+}
+
+// 항목의 부모를 찾는 함수
+TSharedPtr<FPartTreeItem> SLevelBasedTreeView::FindParentItem(const TSharedPtr<FPartTreeItem>& ChildItem)
+{
+	if (!ChildItem.IsValid() || ChildItem->NextPart.IsEmpty() || ChildItem->NextPart.Equals(TEXT("nan"), ESearchCase::IgnoreCase))
+	{
+		return nullptr;
+	}
+    
+	// NextPart를 기반으로 부모 항목 찾기
+	return *PartNoToItemMap.Find(ChildItem->NextPart);
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
@@ -962,7 +1222,19 @@ void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr
     TSharedPtr<SLevelBasedTreeView> TreeView = SNew(SLevelBasedTreeView)
         .ExcelFilePath(ExcelFilePath);
     
-    OutTreeViewWidget = TreeView;
+	OutTreeViewWidget = SNew(SVerticalBox)
+		// 검색 위젯 추가
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		[
+			TreeView->GetSearchWidget()
+		]
+		// 트리뷰 위젯
+		+ SVerticalBox::Slot()
+		.FillHeight(1.0f)
+		[
+			TreeView.ToSharedRef()
+		];
     
     // 메타데이터 위젯에 이미지 위젯 추가
     OutMetadataWidget = SNew(SBorder)

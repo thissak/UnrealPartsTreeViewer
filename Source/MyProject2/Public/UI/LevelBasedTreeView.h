@@ -107,6 +107,13 @@ public:
      */
     void SelectActorByPartNo(const FString& PartNo);
 
+	//===== 검색 UI 위젯 반환 함수 =====//
+	TSharedRef<SWidget> GetSearchWidget();
+    
+	//===== 검색 이벤트 핸들러 =====//
+	void OnSearchTextChanged(const FText& InText);
+	void OnSearchTextCommitted(const FText& InText, ETextCommit::Type CommitType);
+
     //===== 위젯 및 UI 관련 =====//
     
     /**
@@ -133,6 +140,11 @@ public:
     FText GetSelectedItemMetadata() const;
 
 private:
+	 //===== 검색 관련 변수 =====//
+	 FString SearchText;
+	 bool bIsSearching;
+	 TArray<TSharedPtr<FPartTreeItem>> SearchResults;
+	
     //===== 트리뷰 및 데이터 관련 변수 =====//
     
     /** 트리뷰 위젯 */
@@ -209,6 +221,13 @@ private:
      * @param OutChildren - 자식 항목들을 저장할 배열
      */
     void OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<TSharedPtr<FPartTreeItem>>& OutChildren);
+
+	//===== 검색 관련 함수 =====//
+	void PerformSearch(const FString& InSearchText);
+	bool DoesItemMatchSearch(const TSharedPtr<FPartTreeItem>& Item, const FString& InSearchText);
+	void ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item);
+	TSharedPtr<FPartTreeItem> FindParentItem(const TSharedPtr<FPartTreeItem>& ChildItem);
+	bool IsChildOf(const TSharedPtr<FPartTreeItem>& PotentialChild, const TSharedPtr<FPartTreeItem>& PotentialParent);
 
     //===== 유틸리티 함수 =====//
     
