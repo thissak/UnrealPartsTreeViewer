@@ -173,15 +173,30 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 }
 
 // OnSearchTextChanged 함수 수정 (SLevelBasedTreeView.cpp 파일)
+// OnSearchTextChanged 함수 수정
 void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
 {
-    // 검색어가 변경되면 검색 실행
-    SearchText = InText.ToString();
-	
+    // 새 검색어
+    FString NewSearchText = InText.ToString();
+    
+    // 이전에 빈 상태에서 첫 글자 입력 시 트리 접기 실행
+    if (SearchText.IsEmpty() && !NewSearchText.IsEmpty())
+    {
+        UE_LOG(LogTemp, Display, TEXT("검색 시작: 첫 글자 입력 - 트리 접기 시작"));
+        
+        // 바로 실행하는 대신 다음 틱에 실행하도록 지연
+        GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateLambda([this]() {
+            FoldLevelZeroItems();
+        }));
+    }
+    
+    SearchText = NewSearchText;
+    
     if (SearchText.IsEmpty())
     {
         // 검색어가 비었으면 검색 중지
         bIsSearching = false;
+        
         // 모든 필터 해제 및 트리뷰 갱신
         if (bFilteringImageNodes)
         {
@@ -194,12 +209,101 @@ void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
     }
     else
     {
-        // 이전에 검색 중이 아니었다면 트리뷰 갱신 요청
-        bool bWasSearching = bIsSearching;
+        // 검색 상태로 설정
         bIsSearching = true;
-		
+        
         // 검색 실행
         PerformSearch(SearchText);
+    }
+}
+
+// PerformSearch 함수 수정
+void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
+{
+    // 검색 결과 초기화
+    SearchResults.Empty();
+    
+    // 검색어를 소문자로 변환 (대소문자 구분 없는 검색)
+    FString LowerSearchText = InSearchText.ToLower();
+    UE_LOG(LogTemp, Display, TEXT("검색 시작: '%s'"), *InSearchText);
+    
+    // 모든 항목을 순회하며 검색
+    for (const auto& Pair : PartNoToItemMap)
+    {
+        TSharedPtr<FPartTreeItem> Item = Pair.Value;
+        if (DoesItemMatchSearch(Item, LowerSearchText))
+        {
+            SearchResults.Add(Item);
+        }
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("검색 결과: %d개 항목 발견"), SearchResults.Num());
+    
+    // 트리가 접혀있고 검색 결과가 있는 경우에만 경로 펼치기 실행
+    if (SearchResults.Num() > 0 && TreeView.IsValid())
+    {
+        // 검색 결과가 있으면 잠시 지연 후 결과로 경로 펼치기
+        GEditor->GetTimerManager()->SetTimer(
+            ExpandTimerHandle,
+            FTimerDelegate::CreateLambda([this]() {
+                // 첫 번째 검색 결과의 경로 펼치기
+                if (SearchResults.Num() > 0)
+                {
+                    ExpandPathToItem(SearchResults[0]);
+                    TreeView->SetItemSelection(SearchResults[0], true);
+                    TreeView->RequestScrollIntoView(SearchResults[0]);
+                    
+                    UE_LOG(LogTemp, Display, TEXT("검색 결과 경로 펼치기 완료: %s"), 
+                        *SearchResults[0]->PartNo);
+                }
+            }),
+            0.2f,  // 0.2초 지연 (접기 후 펼치기 위한 시간 간격)
+            false  // 반복 없음
+        );
+    }
+    
+    // 트리뷰 갱신 (필터링 적용)
+    TreeView->RequestTreeRefresh();
+}
+
+void SLevelBasedTreeView::FoldLevelZeroItems()
+{
+    if (!TreeView.IsValid())
+    {
+        return;
+    }
+
+    int32 FoldedItemCount = 0;
+    
+    // 최상위 레벨 0 항목 접기
+    if (LevelToItemsMap.Contains(0))
+    {
+        const TArray<TSharedPtr<FPartTreeItem>>& Level0Items = LevelToItemsMap[0];
+        for (const auto& Level0Item : Level0Items)
+        {
+            // 최상위 레벨 0 항목만 접기
+            TreeView->SetItemExpansion(Level0Item, false);
+            FoldedItemCount++;
+        }
+        
+        UE_LOG(LogTemp, Display, TEXT("레벨 0 항목 접기 완료: %d개 항목"), FoldedItemCount);
+    }
+    else
+    {
+        // LevelToItemsMap에 레벨 0 항목이 없으면 루트 항목 접기
+        for (auto& RootItem : AllRootItems)
+        {
+            TreeView->SetItemExpansion(RootItem, false);
+            FoldedItemCount++;
+        }
+        
+        UE_LOG(LogTemp, Display, TEXT("루트 항목 접기 완료: %d개 항목"), FoldedItemCount);
+    }
+    
+    // 트리뷰 갱신
+    if (FoldedItemCount > 0)
+    {
+        TreeView->RequestTreeRefresh();
     }
 }
 
@@ -1141,51 +1245,6 @@ bool SLevelBasedTreeView::IsChildOf(const TSharedPtr<FPartTreeItem>& PotentialCh
 	}
     
 	return false;
-}
-
-// 검색 실행 함수
-void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
-{
-    // 검색 결과 초기화
-    SearchResults.Empty();
-    bIsSearching = true;
-    
-    // 검색어를 소문자로 변환 (대소문자 구분 없는 검색)
-    FString LowerSearchText = InSearchText.ToLower();
-    UE_LOG(LogTemp, Display, TEXT("검색 시작: '%s'"), *InSearchText);
-    
-    // 모든 항목을 순회하며 검색
-    for (const auto& Pair : PartNoToItemMap)
-    {
-        TSharedPtr<FPartTreeItem> Item = Pair.Value;
-        if (DoesItemMatchSearch(Item, LowerSearchText))
-        {
-            SearchResults.Add(Item);
-        }
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("검색 결과: %d개 항목 발견"), SearchResults.Num());
-    
-    // 검색 시작 시 모든 항목 접기
-    if (TreeView.IsValid())
-    {
-        for (auto& RootItem : AllRootItems)
-        {
-            TreeView->SetItemExpansion(RootItem, false);
-        }
-    }
-    
-    // 검색 결과가 있으면 첫 번째 결과로 스크롤 및 선택하고 경로 펼치기
-    if (SearchResults.Num() > 0)
-    {
-        // 결과 항목의 경로를 펼치고 항목 선택
-        ExpandPathToItem(SearchResults[0]);
-        TreeView->SetItemSelection(SearchResults[0], true);
-        TreeView->RequestScrollIntoView(SearchResults[0]);
-    }
-    
-    // 트리뷰 갱신 (필터링 적용)
-    TreeView->RequestTreeRefresh();
 }
 
 // 항목이 검색어와 일치하는지 확인

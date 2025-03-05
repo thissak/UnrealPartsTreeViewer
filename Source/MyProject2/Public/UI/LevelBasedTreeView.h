@@ -142,8 +142,11 @@ public:
 private:
 	 //===== 검색 관련 변수 =====//
 	 FString SearchText;
+	 FTimerHandle ExpandTimerHandle;
 	 bool bIsSearching;
+	 bool bHasFoldedForCurrentSearch;
 	 TArray<TSharedPtr<FPartTreeItem>> SearchResults;
+	 void FoldLevelZeroItems();
 	
     //===== 트리뷰 및 데이터 관련 변수 =====//
     
