@@ -172,11 +172,25 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 		];
 }
 
-// 검색 텍스트 변경 이벤트 핸들러
+// OnSearchTextChanged 함수 수정 (SLevelBasedTreeView.cpp 파일)
 void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
 {
 	// 검색어가 변경되면 검색 실행
-	SearchText = InText.ToString();
+	FString NewText = InText.ToString();
+	
+	// 첫 글자 입력 시 트리 접기
+	if (SearchText.IsEmpty() && !NewText.IsEmpty())
+	{
+		// 모든 트리 아이템 접기
+		for (auto& RootItem : AllRootItems)
+		{
+			TreeView->SetItemExpansion(RootItem, false);
+		}
+		UE_LOG(LogTemp, Display, TEXT("검색 시작 - 트리 접기"));
+	}
+	
+	SearchText = NewText;
+	
 	if (SearchText.IsEmpty())
 	{
 		// 검색어가 비었으면 검색 중지
@@ -194,6 +208,7 @@ void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
 	else
 	{
 		// 검색 실행
+		bIsSearching = true;
 		PerformSearch(SearchText);
 	}
 }
