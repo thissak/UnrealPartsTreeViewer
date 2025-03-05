@@ -23,12 +23,12 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     MaxLevel = 0;
     bFilteringImageNodes = false;
     
-    // 이미지 브러시 초기화 - 완전한 설정으로 생성
+    // 이미지 브러시 초기화
     FSlateBrush* InitialBrush = new FSlateBrush();
-    InitialBrush->DrawAs = ESlateBrushDrawType::NoDrawType;  // 초기 상태에서는 그리지 않음
+    InitialBrush->DrawAs = ESlateBrushDrawType::NoDrawType;
     InitialBrush->Tiling = ESlateBrushTileType::NoTile;
     InitialBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
-    InitialBrush->ImageSize = FVector2D(400, 300);  // 초기 크기 설정
+    InitialBrush->ImageSize = FVector2D(400, 300);
     
     CurrentImageBrush = MakeShareable(InitialBrush);
     
@@ -52,7 +52,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
             )
     ];
     
-    // 엑셀 파일 로드 및 트리뷰 구성
+    // 파일 로드 및 트리뷰 구성
     if (!InArgs._ExcelFilePath.IsEmpty())
     {
         BuildTreeView(InArgs._ExcelFilePath);
@@ -66,11 +66,10 @@ void SLevelBasedTreeView::SetupEmptyBrush(FSlateBrush* Brush)
     Brush->ImageSize = FVector2D(400, 300);
     Brush->DrawAs = ESlateBrushDrawType::NoDrawType;
     
-    // 현재 브러시를 빈 브러시로 교체
     CurrentImageBrush = MakeShareable(Brush);
 }
 
-// 액터 선택 함수 추가
+// 액터 선택 함수
 void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
 {
 #if WITH_EDITOR
@@ -101,9 +100,6 @@ void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
                         // 액터 선택
                         GEditor->SelectActor(CurrentActor, true, true, true);
                         bFoundAnyActor = true;
-                        
-                        // 선택된 액터 정보 로그 출력
-                        UE_LOG(LogTemp, Display, TEXT("액터 선택됨: %s (PartNo: %s)"), *ActorName, *PartNo);
                     }
                 }
             }
@@ -123,84 +119,63 @@ void SLevelBasedTreeView::OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Ite
     {
         // 더블클릭 시 SelectActorByPartNo 함수 호출
         SelectActorByPartNo(Item->PartNo);
-        
-        // 로그에 메시지 출력
-        UE_LOG(LogTemp, Display, TEXT("더블클릭: '%s' 액터 선택됨"), *Item->PartNo);
     }
 }
 
-// CacheImageExistence 함수 수정 - 실제 에셋 경로를 저장
+// 이미지 존재 여부 캐싱 함수
 void SLevelBasedTreeView::CacheImageExistence()
 {
-    UE_LOG(LogTemp, Display, TEXT("CacheImageExistence 시작"));
-    
     // Set 및 맵 초기화
     PartsWithImageSet.Empty();
-    PartNoToImagePathMap.Empty(); // 파트 번호별 실제 이미지 경로를 저장할 맵 추가
+    PartNoToImagePathMap.Empty();
     
-    try
+    // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
+    const FString ImageDir = TEXT("/Game/00_image");
+    
+    // 에셋 레지스트리 활용
+    TArray<FAssetData> AssetList;
+    FARFilter Filter;
+    
+    // ClassNames 대신 ClassPaths 사용
+    Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
+    Filter.PackagePaths.Add(*ImageDir);
+    
+    // 에셋 레지스트리에서 모든 텍스처 에셋 찾기
+    FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+    AssetRegistryModule.Get().GetAssets(Filter, AssetList);
+    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 시작: 총 %d개 에셋 발견"), AssetList.Num());
+    
+    // 에셋 처리
+    for (const FAssetData& Asset : AssetList)
     {
-        // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
-        const FString ImageDir = TEXT("/Game/00_image");
-        UE_LOG(LogTemp, Display, TEXT("이미지 디렉토리 경로: %s"), *ImageDir);
+        FString AssetName = Asset.AssetName.ToString();
+        FString AssetPath = Asset.ObjectPath.ToString();
         
-        // 에셋 레지스트리 활용
-        TArray<FAssetData> AssetList;
-        FARFilter Filter;
+        // 언더바로 문자열 분리
+        TArray<FString> Parts;
+        AssetName.ParseIntoArray(Parts, TEXT("_"));
         
-        // ClassNames 대신 ClassPaths 사용
-        Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
-        Filter.PackagePaths.Add(*ImageDir);
-        
-        // 에셋 레지스트리에서 모든 텍스처 에셋 찾기
-        FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-        AssetRegistryModule.Get().GetAssets(Filter, AssetList);
-        UE_LOG(LogTemp, Display, TEXT("GetAssets 호출 완료. 찾은 에셋 수: %d"), AssetList.Num());
-        
-        // 에셋 처리
-        for (const FAssetData& Asset : AssetList)
+        // 언더바로 구분된 부분이 4개 이상인지 확인
+        if (Parts.Num() >= 4)
         {
-            FString AssetName = Asset.AssetName.ToString();
-            FString AssetPath = Asset.ObjectPath.ToString();
+            // 3번째 인덱스가 파트 번호
+            FString PartNo = Parts[3];
             
-            // 언더바로 문자열 분리
-            TArray<FString> Parts;
-            AssetName.ParseIntoArray(Parts, TEXT("_"));
-            
-            // 언더바로 구분된 부분이 4개 이상인지 확인
-            if (Parts.Num() >= 4)
+            // PartsWithImageSet에 파트 번호 추가
+            if(PartNoToItemMap.Contains(PartNo))
             {
-                // 3번째 인덱스가 파트 번호
-                FString PartNo = Parts[3];
-                
-                // PartsWithImageSet에 파트 번호 추가
-                if(PartNoToItemMap.Contains(PartNo))
-                {
-                    PartsWithImageSet.Add(PartNo);
-                    // 실제 에셋 경로 저장
-                    PartNoToImagePathMap.Add(PartNo, AssetPath);
-                    UE_LOG(LogTemp, Display, TEXT("파트 번호 '%s'에 대한 이미지 경로 저장: %s"), *PartNo, *AssetPath);
-                }
+                PartsWithImageSet.Add(PartNo);
+                // 실제 에셋 경로 저장
+                PartNoToImagePathMap.Add(PartNo, AssetPath);
             }
         }
     }
-    catch (const std::exception&)
-    {
-        UE_LOG(LogTemp, Error, TEXT("에셋 레지스트리 처리 중 std::exception 에러"));
-    }
-    catch (...)
-    {
-        UE_LOG(LogTemp, Error, TEXT("에셋 레지스트리 처리 중 알 수 없는 에러 발생"));
-    }
     
-    // 결과 로그 출력
-    UE_LOG(LogTemp, Display, TEXT("이미지 있는 노드 갯수: %d / 전체 노드 갯수: %d"), 
+    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 완료: 이미지 있는 노드 %d개 / 전체 노드 %d개"), 
            PartsWithImageSet.Num(), PartNoToItemMap.Num());
-    
-    UE_LOG(LogTemp, Display, TEXT("CacheImageExistence 완료"));
 }
 
-// UpdateSelectedItemImage 함수 수정 - 저장된 실제 이미지 경로 사용
+// 선택된 항목 이미지 업데이트
 void SLevelBasedTreeView::UpdateSelectedItemImage()
 {
     // 선택된 항목 가져오기
@@ -230,13 +205,11 @@ void SLevelBasedTreeView::UpdateSelectedItemImage()
         if (AssetPathPtr)
         {
             AssetPath = *AssetPathPtr;
-            UE_LOG(LogTemp, Display, TEXT("저장된 이미지 경로 사용: %s"), *AssetPath);
         }
         else
         {
             // 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
             AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNoStr);
-            UE_LOG(LogTemp, Warning, TEXT("저장된 이미지 경로가 없어 추정 경로 사용: %s"), *AssetPath);
         }
         
         // 에셋 로드 시도
@@ -250,36 +223,25 @@ void SLevelBasedTreeView::UpdateSelectedItemImage()
             
             // 현재 브러시를 새 브러시로 교체
             CurrentImageBrush = MakeShareable(NewBrush);
-            
-            UE_LOG(LogTemp, Display, TEXT("이미지 로드 성공: %s"), *AssetPath);
         }
         else
         {
             // 이미지가 로드되지 않음 - 빈 브러시 설정
             SetupEmptyBrush(NewBrush);
-            UE_LOG(LogTemp, Error, TEXT("이미지 로드 실패: %s"), *AssetPath);
-            
-            // 파일 존재 여부 확인 (디버깅 목적)
-            FString ContentDir = FPaths::ProjectContentDir();
-            FString RelativePath = AssetPath.Replace(TEXT("/Game/"), TEXT(""));
-            FString AbsolutePath = FPaths::Combine(ContentDir, RelativePath) + TEXT(".uasset");
-            
-            bool bFileExists = FPlatformFileManager::Get().GetPlatformFile().FileExists(*AbsolutePath);
-            UE_LOG(LogTemp, Error, TEXT("파일 존재 여부: %s, 경로: %s"), 
-                bFileExists ? TEXT("있음") : TEXT("없음"), *AbsolutePath);
+            UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
         }
     }
     else
     {
         // 이미지가 없음 - 빈 브러시 설정
         SetupEmptyBrush(NewBrush);
-        UE_LOG(LogTemp, Verbose, TEXT("파트 '%s'의 이미지가 없습니다"), *PartNoStr);
     }
     
     // 이미지 위젯에 새 브러시 설정
     ItemImageWidget->SetImage(CurrentImageBrush.Get());
 }
 
+// 컨텍스트 메뉴 생성
 TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
 {
     FMenuBuilder MenuBuilder(true, nullptr);
@@ -352,14 +314,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                         // 클립보드에 모든 선택된 항목의 이름 복사
                         FPlatformApplicationMisc::ClipboardCopy(*CombinedNames);
                     
-                        if (Items.Num() == 1)
-                        {
-                            UE_LOG(LogTemp, Display, TEXT("노드 이름 '%s'이(가) 클립보드에 복사되었습니다"), *Items[0]->PartNo);
-                        }
-                        else
-                        {
-                            UE_LOG(LogTemp, Display, TEXT("%d개의 노드 이름이 클립보드에 복사되었습니다: %s"), Items.Num(), *CombinedNames);
-                        }
+                        UE_LOG(LogTemp, Display, TEXT("노드 이름 클립보드에 복사됨: %d개 항목"), Items.Num());
                     }
                 }),
                 FCanExecuteAction::CreateLambda([this]() { 
@@ -368,6 +323,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                 })
             )
         );
+        
         // 상세 정보 보기 (선택된 항목이 있을 때만 활성화)
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("상세 정보 보기")),
@@ -380,13 +336,8 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                     if (Items.Num() > 0)
                     {
                         TSharedPtr<FPartTreeItem> Item = Items[0];
-                        FString DetailsInfo = FString::Printf(
-                            TEXT("Part Details - PartNo: %s, Level: %d, Type: %s, Nomenclature: %s"),
-                            *Item->PartNo, Item->Level, *Item->Type, *Item->Nomenclature
-                        );
-                        UE_LOG(LogTemp, Display, TEXT("%s"), *DetailsInfo);
-                        
-                        // 이미 메타데이터 위젯에 정보가 표시되므로 추가 작업은 필요 없음
+                        UE_LOG(LogTemp, Display, TEXT("항목 상세 정보 - PartNo: %s, Level: %d"), 
+                            *Item->PartNo, Item->Level);
                     }
                 }),
                 FCanExecuteAction::CreateLambda([SelectedItem]() { 
@@ -406,7 +357,6 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                 FExecuteAction::CreateLambda([this]() {
                     // 선택된 항목의 이미지 업데이트 (이미지가 있는 경우)
                     UpdateSelectedItemImage();
-                    UE_LOG(LogTemp, Display, TEXT("이미지 업데이트 완료"));
                 }),
                 FCanExecuteAction::CreateLambda([bHasImage]() { 
                     // 이미지가 있는 경우에만 활성화
@@ -415,7 +365,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
             )
         );
         
-        // 선택 노드 펼치기 (선택된 항목이 있을 때만 활성화)
+        // 선택 노드 펼치기/접기 메뉴 항목들
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("하위 항목 모두 펼치기")),
             FText::FromString(TEXT("선택한 항목의 모든 하위 항목을 펼칩니다")),
@@ -426,7 +376,6 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                     if (Items.Num() > 0)
                     {
                         ExpandItemRecursively(Items[0], true);
-                        UE_LOG(LogTemp, Display, TEXT("선택한 항목의 하위 항목이 모두 펼쳐졌습니다"));
                     }
                 }),
                 FCanExecuteAction::CreateLambda([SelectedItem]() { 
@@ -436,7 +385,6 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
             )
         );
         
-        // 선택 노드 접기 (선택된 항목이 있을 때만 활성화)
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("하위 항목 모두 접기")),
             FText::FromString(TEXT("선택한 항목의 모든 하위 항목을 접습니다")),
@@ -447,7 +395,6 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                     if (Items.Num() > 0)
                     {
                         ExpandItemRecursively(Items[0], false);
-                        UE_LOG(LogTemp, Display, TEXT("선택한 항목의 하위 항목이 모두 접혔습니다"));
                     }
                 }),
                 FCanExecuteAction::CreateLambda([SelectedItem]() { 
@@ -478,13 +425,14 @@ void SLevelBasedTreeView::ExpandItemRecursively(TSharedPtr<FPartTreeItem> Item, 
     }
 }
 
+// CSV 파일 읽기 함수
 bool SLevelBasedTreeView::ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows)
 {
     // 파일을 줄 단위로 읽기
     TArray<FString> Lines;
     if (!FFileHelper::LoadFileToStringArray(Lines, *FilePath))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load file: %s"), *FilePath);
+        UE_LOG(LogTemp, Error, TEXT("파일 로드 실패: %s"), *FilePath);
         return false;
     }
     
@@ -527,6 +475,7 @@ bool SLevelBasedTreeView::ReadCSVFile(const FString& FilePath, TArray<TArray<FSt
     return OutRows.Num() > 0;
 }
 
+// 트리뷰 구성 함수
 bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
 {
     // 데이터 초기화
@@ -536,17 +485,19 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     PartsWithImageSet.Empty();
     MaxLevel = 0;
     
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 구성 시작: %s"), *FilePath);
+    
     // CSV 파일 읽기
     TArray<TArray<FString>> ExcelData;
     if (!ReadCSVFile(FilePath, ExcelData))
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to read CSV file: %s"), *FilePath);
+        UE_LOG(LogTemp, Error, TEXT("CSV 파일 읽기 실패: %s"), *FilePath);
         return false;
     }
     
     if (ExcelData.Num() < 2) // 헤더 + 최소 1개 이상의 데이터 행 필요
     {
-        UE_LOG(LogTemp, Error, TEXT("Not enough rows in data"));
+        UE_LOG(LogTemp, Error, TEXT("데이터 행이 부족합니다"));
         return false;
     }
     
@@ -571,6 +522,8 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     NextPartColIdx = (NextPartColIdx != INDEX_NONE) ? NextPartColIdx : 13; // N열 (NextPart)
     LevelColIdx = (LevelColIdx != INDEX_NONE) ? LevelColIdx : 1; // B열 (Level)
     
+    UE_LOG(LogTemp, Display, TEXT("CSV 데이터 읽기 완료: %d개 행"), ExcelData.Num() - 1);
+    
     // 1단계: 모든 항목 생성 및 레벨별 그룹화
     CreateAndGroupItems(ExcelData, PartNoColIdx, NextPartColIdx, LevelColIdx);
     
@@ -592,27 +545,33 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
         }
     }
 
-    // 노드 갯수 로그 출력 추가
+    // 트리뷰 구성 요약 로그 출력
     int32 TotalNodeCount = 0;
     for (const auto& LevelPair : LevelToItemsMap)
     {
         TotalNodeCount += LevelPair.Value.Num();
     }
     
-    UE_LOG(LogTemp, Display, TEXT("트리 노드 총 갯수: %d"), TotalNodeCount);
-    UE_LOG(LogTemp, Display, TEXT("루트 노드 갯수: %d"), AllRootItems.Num());
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 구성 요약:"));
+    UE_LOG(LogTemp, Display, TEXT("- 총 노드 수: %d개"), TotalNodeCount);
+    UE_LOG(LogTemp, Display, TEXT("- 루트 노드 수: %d개"), AllRootItems.Num());
+    UE_LOG(LogTemp, Display, TEXT("- 최대 레벨 깊이: %d"), MaxLevel);
+    UE_LOG(LogTemp, Display, TEXT("- 이미지 있는 노드 수: %d개 (%.1f%%)"), 
+           PartsWithImageSet.Num(), 
+           (TotalNodeCount > 0) ? (float)PartsWithImageSet.Num() / TotalNodeCount * 100.0f : 0.0f);
     
-    // 각 레벨별 노드 갯수도 출력
+    // 각 레벨별 노드 갯수 출력
     for (int32 Level = 0; Level <= MaxLevel; ++Level)
     {
         const TArray<TSharedPtr<FPartTreeItem>>* LevelItems = LevelToItemsMap.Find(Level);
         int32 LevelNodeCount = LevelItems ? LevelItems->Num() : 0;
-        UE_LOG(LogTemp, Display, TEXT("레벨 %d 노드 갯수: %d"), Level, LevelNodeCount);
+        UE_LOG(LogTemp, Display, TEXT("- 레벨 %d 노드 수: %d개"), Level, LevelNodeCount);
     }
     
     return AllRootItems.Num() > 0;
 }
 
+// 메타데이터 위젯 반환 함수
 TSharedRef<SWidget> SLevelBasedTreeView::GetMetadataWidget()
 {
     // 메타데이터 표시를 위한 텍스트 블록 생성
@@ -622,14 +581,14 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetMetadataWidget()
     return MetadataText;
 }
 
-// 이미지 위젯 반환 함수 구현
+// 이미지 위젯 반환 함수
 TSharedRef<SWidget> SLevelBasedTreeView::GetImageWidget()
 {
-    // 이미지 박스 크기 설정 (고정된 크기)
+    // 이미지 박스 크기 설정
     const float ImageWidth = 300.0f;
     const float ImageHeight = 200.0f;
 
-    // 이미지 위젯 생성 (SImage 대신 SBorder 사용)
+    // 이미지 위젯 생성
     TSharedRef<SBorder> ImageBorder = SNew(SBorder)
         .BorderImage(FCoreStyle::Get().GetBrush("NoBorder"))
         .Padding(0)
@@ -656,7 +615,7 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetImageWidget()
         ];
 }
 
-// 선택된 항목의 메타데이터를 텍스트로 반환하는 메서드
+// 선택된 항목의 메타데이터를 텍스트로 반환하는 메서드 (계속)
 FText SLevelBasedTreeView::GetSelectedItemMetadata() const
 {
     // 선택된 항목 가져오기
@@ -715,61 +674,31 @@ void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESe
     if (Item.IsValid())
     {
         UpdateSelectedItemImage();
-
     }
 }
 
 // ToggleImageFiltering 함수 구현
 void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
 {
-    UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 필터링 %s로 변경 시도"), 
-        bEnable ? TEXT("활성화") : TEXT("비활성화"));
-    
     // 이미 같은 상태면 아무것도 하지 않음
     if (bFilteringImageNodes == bEnable)
     {
-        UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 이미 같은 상태, 변경 무시"));
         return;
     }
         
     bFilteringImageNodes = bEnable;
     
-    UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - PartsWithImageSet 크기: %d"), 
-        PartsWithImageSet.Num());
-    
-    // 로깅을 위해 이미지가 있는 파트 번호 출력 (최대 5개까지만)
-    int32 Count = 0;
-    for (const FString& PartNo : PartsWithImageSet)
-    {
-        if (Count < 5)
-        {
-            UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 이미지 있는 파트: %s"), *PartNo);
-        }
-        Count++;
-        
-        if (Count == 5 && PartsWithImageSet.Num() > 5)
-        {
-            UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 외 %d개 더..."), 
-                PartsWithImageSet.Num() - 5);
-        }
-    }
+    UE_LOG(LogTemp, Display, TEXT("이미지 필터링 %s: 이미지 있는 파트 %d개"), 
+        bEnable ? TEXT("활성화") : TEXT("비활성화"), PartsWithImageSet.Num());
     
     // OnGetChildren 함수에서 필터링하도록 트리뷰 갱신만 요청
     if (TreeView.IsValid())
     {
-        UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 트리뷰 갱신 요청"));
         TreeView->RequestTreeRefresh();
     }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 트리뷰가 유효하지 않음"));
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 완료, 현재 필터링 상태: %s"), 
-        bFilteringImageNodes ? TEXT("활성화됨") : TEXT("비활성화됨"));
 }
 
-// LevelBasedTreeView.cpp에 함수 구현
+// 이미지가 있는 자식 노드 확인 함수
 bool SLevelBasedTreeView::HasChildWithImage(TSharedPtr<FPartTreeItem> Item)
 {
     if (!Item.IsValid())
@@ -858,6 +787,8 @@ void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& Exc
     QtyColIdx = (QtyColIdx != INDEX_NONE) ? QtyColIdx : 12;
     
     // 모든 행 처리
+    int32 ValidItemCount = 0;
+    
     for (int32 i = 1; i < ExcelData.Num(); ++i)
     {
         const TArray<FString>& Row = ExcelData[i];
@@ -878,6 +809,8 @@ void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& Exc
         
         if (!PartNo.IsEmpty())
         {
+            ValidItemCount++;
+            
             // 파트 항목 생성
             TSharedPtr<FPartTreeItem> Item = MakeShared<FPartTreeItem>(PartNo, NextPart, Level);
             
@@ -914,10 +847,14 @@ void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& Exc
             }
         }
     }
+    
+    UE_LOG(LogTemp, Display, TEXT("항목 생성 완료: 유효한 항목 %d개 처리"), ValidItemCount);
 }
 
 void SLevelBasedTreeView::BuildTreeStructure()
 {
+    UE_LOG(LogTemp, Display, TEXT("트리 구조 구축 시작: 최대 레벨 %d"), MaxLevel);
+    
     // 레벨 0부터 MaxLevel-1까지 순회하며 부모-자식 관계 설정
     for (int32 CurrentLevel = 0; CurrentLevel < MaxLevel; ++CurrentLevel)
     {
@@ -935,6 +872,8 @@ void SLevelBasedTreeView::BuildTreeStructure()
         // 다음 레벨의 모든 항목
         TArray<TSharedPtr<FPartTreeItem>>& NextLevelItems = LevelToItemsMap[CurrentLevel + 1];
         
+        int32 ConnectionCount = 0;
+        
         // 다음 레벨의 각 항목에 대해 부모 찾기
         for (const TSharedPtr<FPartTreeItem>& ChildItem : NextLevelItems)
         {
@@ -948,16 +887,23 @@ void SLevelBasedTreeView::BuildTreeStructure()
                 {
                     // 부모-자식 관계 설정
                     (*ParentItemPtr)->Children.Add(ChildItem);
+                    ConnectionCount++;
                 }
             }
         }
+        
+        UE_LOG(LogTemp, Verbose, TEXT("레벨 %d -> %d 부모-자식 연결: %d개 설정됨"), 
+            CurrentLevel, CurrentLevel + 1, ConnectionCount);
     }
     
     // 루트 항목들이 설정되지 않았으면, 레벨 0의 항목들을 루트로 설정
     if (AllRootItems.Num() == 0 && LevelToItemsMap.Contains(0))
     {
         AllRootItems = LevelToItemsMap[0];
+        UE_LOG(LogTemp, Display, TEXT("루트 항목 자동 설정: 레벨 0의 모든 항목(%d개)이 루트로 설정됨"), AllRootItems.Num());
     }
+    
+    UE_LOG(LogTemp, Display, TEXT("트리 구조 구축 완료: 루트 항목 %d개"), AllRootItems.Num());
 }
 
 TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeItem> Item, const TSharedRef<STableViewBase>& OwnerTable)
@@ -995,12 +941,8 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
             if (PartsWithImageSet.Contains(Child->PartNo) || HasChildWithImage(Child))
             {
                 OutChildren.Add(Child);
-                UE_LOG(LogTemp, Verbose, TEXT("노드 %s 추가됨 (이미지 있음)"), *Child->PartNo);
             }
         }
-        
-        UE_LOG(LogTemp, Display, TEXT("OnGetChildren - 총 %d개 자식 중 %d개 표시 (필터링 적용)"), 
-            Item->Children.Num(), OutChildren.Num());
     }
     else
     {
@@ -1014,6 +956,8 @@ END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 // 트리뷰 위젯 생성 헬퍼 함수
 void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr<SWidget>& OutMetadataWidget, const FString& ExcelFilePath)
 {
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 위젯 생성 시작: %s"), *ExcelFilePath);
+    
     // SLevelBasedTreeView 인스턴스 생성
     TSharedPtr<SLevelBasedTreeView> TreeView = SNew(SLevelBasedTreeView)
         .ExcelFilePath(ExcelFilePath);
@@ -1083,4 +1027,6 @@ void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr
               ]
           ]
       ];
+      
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 위젯 생성 완료"));
 }
