@@ -21,6 +21,7 @@ BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 void SLevelBasedTreeView::Construct(const FArguments& InArgs)
 {
     MaxLevel = 0;
+    bFilteringImageNodes = false;
     
     // 이미지 브러시 초기화 - 완전한 설정으로 생성
     FSlateBrush* InitialBrush = new FSlateBrush();
@@ -289,6 +290,43 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
     
     MenuBuilder.BeginSection("TreeItemActions", FText::FromString(TEXT("메뉴")));
     {
+        // 이미지 필터 활성화
+        MenuBuilder.AddMenuEntry(
+            FText::FromString(TEXT("이미지 있는 노드만 보기")),
+            FText::FromString(TEXT("이미지가 있는 노드만 표시합니다")),
+            FSlateIcon(),
+            FUIAction(
+                FExecuteAction::CreateLambda([this]() {
+                    ToggleImageFiltering(true);
+                }),
+                FCanExecuteAction::CreateLambda([this]() { 
+                    // 이미 필터링 중이면 비활성화
+                    return !bFilteringImageNodes && PartsWithImageSet.Num() > 0; 
+                }),
+                FIsActionChecked::CreateLambda([this]() {
+                    return bFilteringImageNodes;
+                })
+            ),
+            NAME_None,
+            EUserInterfaceActionType::Check
+        );
+        
+        // 이미지 필터 해제
+        MenuBuilder.AddMenuEntry(
+            FText::FromString(TEXT("모든 노드 보기")),
+            FText::FromString(TEXT("이미지 필터를 해제하고 모든 노드를 표시합니다")),
+            FSlateIcon(),
+            FUIAction(
+                FExecuteAction::CreateLambda([this]() {
+                    ToggleImageFiltering(false);
+                }),
+                FCanExecuteAction::CreateLambda([this]() { 
+                    // 필터링 중일 때만 활성화
+                    return bFilteringImageNodes; 
+                })
+            )
+        );
+        
         // 노드 이름 클립보드에 복사 (선택된 항목이 있을 때만 활성화)
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("노드 이름 복사")),
@@ -681,6 +719,97 @@ void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESe
     }
 }
 
+// ToggleImageFiltering 함수 구현
+void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
+{
+    UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 필터링 %s로 변경 시도"), 
+        bEnable ? TEXT("활성화") : TEXT("비활성화"));
+    
+    // 이미 같은 상태면 아무것도 하지 않음
+    if (bFilteringImageNodes == bEnable)
+    {
+        UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 이미 같은 상태, 변경 무시"));
+        return;
+    }
+        
+    bFilteringImageNodes = bEnable;
+    
+    UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - PartsWithImageSet 크기: %d"), 
+        PartsWithImageSet.Num());
+    
+    // 로깅을 위해 이미지가 있는 파트 번호 출력 (최대 5개까지만)
+    int32 Count = 0;
+    for (const FString& PartNo : PartsWithImageSet)
+    {
+        if (Count < 5)
+        {
+            UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 이미지 있는 파트: %s"), *PartNo);
+        }
+        Count++;
+        
+        if (Count == 5 && PartsWithImageSet.Num() > 5)
+        {
+            UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 외 %d개 더..."), 
+                PartsWithImageSet.Num() - 5);
+        }
+    }
+    
+    // OnGetChildren 함수에서 필터링하도록 트리뷰 갱신만 요청
+    if (TreeView.IsValid())
+    {
+        UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 트리뷰 갱신 요청"));
+        TreeView->RequestTreeRefresh();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 트리뷰가 유효하지 않음"));
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("SLevelBasedTreeView::ToggleImageFiltering - 완료, 현재 필터링 상태: %s"), 
+        bFilteringImageNodes ? TEXT("활성화됨") : TEXT("비활성화됨"));
+}
+
+// LevelBasedTreeView.cpp에 함수 구현
+bool SLevelBasedTreeView::HasChildWithImage(TSharedPtr<FPartTreeItem> Item)
+{
+    if (!Item.IsValid())
+        return false;
+    
+    // 직접 이미지가 있는지 확인
+    if (PartsWithImageSet.Contains(Item->PartNo))
+        return true;
+    
+    // 자식 항목들도 확인
+    for (const auto& Child : Item->Children)
+    {
+        if (HasChildWithImage(Child))
+            return true;
+    }
+    
+    return false;
+}
+
+// 이미지가 있는 항목만 재귀적으로 필터링하는 함수
+bool SLevelBasedTreeView::FilterItemsByImage(TSharedPtr<FPartTreeItem> Item)
+{
+    // 현재 항목에 이미지가 있는지 확인
+    bool bCurrentItemHasImage = PartsWithImageSet.Contains(Item->PartNo);
+    
+    // 하위 항목도 확인
+    bool bAnyChildHasImage = false;
+    
+    for (auto& ChildItem : Item->Children)
+    {
+        if (FilterItemsByImage(ChildItem))
+        {
+            bAnyChildHasImage = true;
+        }
+    }
+    
+    // 현재 항목이나 하위 항목 중 하나라도 이미지가 있으면 true 반환
+    return bCurrentItemHasImage || bAnyChildHasImage;
+}
+
 void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& ExcelData, int32 PartNoColIdx, int32 NextPartColIdx, int32 LevelColIdx)
 {
     // 필요한 열 인덱스 찾기
@@ -858,8 +987,26 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
 
 void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<TSharedPtr<FPartTreeItem>>& OutChildren)
 {
-    // 자식 항목 반환
-    OutChildren = Item->Children;
+    if (bFilteringImageNodes)
+    {
+        // 이미지가 있는 자식 항목만 필터링
+        for (const auto& Child : Item->Children)
+        {
+            if (PartsWithImageSet.Contains(Child->PartNo) || HasChildWithImage(Child))
+            {
+                OutChildren.Add(Child);
+                UE_LOG(LogTemp, Verbose, TEXT("노드 %s 추가됨 (이미지 있음)"), *Child->PartNo);
+            }
+        }
+        
+        UE_LOG(LogTemp, Display, TEXT("OnGetChildren - 총 %d개 자식 중 %d개 표시 (필터링 적용)"), 
+            Item->Children.Num(), OutChildren.Num());
+    }
+    else
+    {
+        // 필터링 없이 모든 자식 항목 반환
+        OutChildren = Item->Children;
+    }
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
