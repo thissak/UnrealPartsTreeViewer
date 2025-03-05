@@ -175,42 +175,32 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 // OnSearchTextChanged 함수 수정 (SLevelBasedTreeView.cpp 파일)
 void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
 {
-	// 검색어가 변경되면 검색 실행
-	FString NewText = InText.ToString();
+    // 검색어가 변경되면 검색 실행
+    SearchText = InText.ToString();
 	
-	// 첫 글자 입력 시 트리 접기
-	if (SearchText.IsEmpty() && !NewText.IsEmpty())
-	{
-		// 모든 트리 아이템 접기
-		for (auto& RootItem : AllRootItems)
-		{
-			TreeView->SetItemExpansion(RootItem, false);
-		}
-		UE_LOG(LogTemp, Display, TEXT("검색 시작 - 트리 접기"));
-	}
-	
-	SearchText = NewText;
-	
-	if (SearchText.IsEmpty())
-	{
-		// 검색어가 비었으면 검색 중지
-		bIsSearching = false;
-		// 모든 필터 해제 및 트리뷰 갱신
-		if (bFilteringImageNodes)
-		{
-			ToggleImageFiltering(false);
-		}
-		else
-		{
-			TreeView->RequestTreeRefresh();
-		}
-	}
-	else
-	{
-		// 검색 실행
-		bIsSearching = true;
-		PerformSearch(SearchText);
-	}
+    if (SearchText.IsEmpty())
+    {
+        // 검색어가 비었으면 검색 중지
+        bIsSearching = false;
+        // 모든 필터 해제 및 트리뷰 갱신
+        if (bFilteringImageNodes)
+        {
+            ToggleImageFiltering(false);
+        }
+        else
+        {
+            TreeView->RequestTreeRefresh();
+        }
+    }
+    else
+    {
+        // 이전에 검색 중이 아니었다면 트리뷰 갱신 요청
+        bool bWasSearching = bIsSearching;
+        bIsSearching = true;
+		
+        // 검색 실행
+        PerformSearch(SearchText);
+    }
 }
 
 // 검색 텍스트 확정 이벤트 핸들러
@@ -1075,55 +1065,56 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
         ];
 }
 
+// OnGetChildren 함수 수정
 void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<TSharedPtr<FPartTreeItem>>& OutChildren)
 {
-	if (bIsSearching && !SearchText.IsEmpty())
-	{
-		// 검색 중인 경우: 검색 결과에 있는 자식 항목이나 
-		// 검색 결과의 부모 경로에 있는 항목만 표시
-		for (const auto& Child : Item->Children)
-		{
-			if (SearchResults.Contains(Child))
-			{
-				// 직접 검색 결과인 경우
-				OutChildren.Add(Child);
-			}
-			else
-			{
-				// 자식 항목 중에 검색 결과가 있는지 확인
-				bool bHasSearchResultChild = false;
-				for (const auto& Result : SearchResults)
-				{
-					if (IsChildOf(Result, Child))
-					{
-						bHasSearchResultChild = true;
-						break;
-					}
-				}
+    if (bIsSearching && !SearchText.IsEmpty())
+    {
+        // 검색 중인 경우: 검색 결과에 있는 자식 항목이나 
+        // 검색 결과의 부모 경로에 있는 항목만 표시
+        for (const auto& Child : Item->Children)
+        {
+            if (SearchResults.Contains(Child))
+            {
+                // 직접 검색 결과인 경우
+                OutChildren.Add(Child);
+            }
+            else
+            {
+                // 자식 항목 중에 검색 결과가 있는지 확인
+                bool bHasSearchResultChild = false;
+                for (const auto& Result : SearchResults)
+                {
+                    if (IsChildOf(Result, Child))
+                    {
+                        bHasSearchResultChild = true;
+                        break;
+                    }
+                }
                 
-				if (bHasSearchResultChild)
-				{
-					OutChildren.Add(Child);
-				}
-			}
-		}
-	}
-	else if (bFilteringImageNodes)
-	{
-		// 이미지 필터링 (기존 코드)
-		for (const auto& Child : Item->Children)
-		{
-			if (PartsWithImageSet.Contains(Child->PartNo) || HasChildWithImage(Child))
-			{
-				OutChildren.Add(Child);
-			}
-		}
-	}
-	else
-	{
-		// 필터링 없이 모든 자식 항목 표시 (기존 코드)
-		OutChildren = Item->Children;
-	}
+                if (bHasSearchResultChild)
+                {
+                    OutChildren.Add(Child);
+                }
+            }
+        }
+    }
+    else if (bFilteringImageNodes)
+    {
+        // 이미지 필터링 (기존 코드)
+        for (const auto& Child : Item->Children)
+        {
+            if (PartsWithImageSet.Contains(Child->PartNo) || HasChildWithImage(Child))
+            {
+                OutChildren.Add(Child);
+            }
+        }
+    }
+    else
+    {
+        // 필터링 없이 모든 자식 항목 표시 (기존 코드)
+        OutChildren = Item->Children;
+    }
 }
 
 // 유틸리티 함수 추가: 한 항목이 다른 항목의 자식인지 확인
@@ -1155,37 +1146,46 @@ bool SLevelBasedTreeView::IsChildOf(const TSharedPtr<FPartTreeItem>& PotentialCh
 // 검색 실행 함수
 void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
 {
-	// 검색 결과 초기화
-	SearchResults.Empty();
-	bIsSearching = true;
+    // 검색 결과 초기화
+    SearchResults.Empty();
+    bIsSearching = true;
     
-	// 검색어를 소문자로 변환 (대소문자 구분 없는 검색)
-	FString LowerSearchText = InSearchText.ToLower();
-	UE_LOG(LogTemp, Display, TEXT("검색 시작: '%s'"), *InSearchText);
+    // 검색어를 소문자로 변환 (대소문자 구분 없는 검색)
+    FString LowerSearchText = InSearchText.ToLower();
+    UE_LOG(LogTemp, Display, TEXT("검색 시작: '%s'"), *InSearchText);
     
-	// 모든 항목을 순회하며 검색
-	for (const auto& Pair : PartNoToItemMap)
-	{
-		TSharedPtr<FPartTreeItem> Item = Pair.Value;
-		if (DoesItemMatchSearch(Item, LowerSearchText))
-		{
-			SearchResults.Add(Item);
-		}
-	}
+    // 모든 항목을 순회하며 검색
+    for (const auto& Pair : PartNoToItemMap)
+    {
+        TSharedPtr<FPartTreeItem> Item = Pair.Value;
+        if (DoesItemMatchSearch(Item, LowerSearchText))
+        {
+            SearchResults.Add(Item);
+        }
+    }
     
-	UE_LOG(LogTemp, Display, TEXT("검색 결과: %d개 항목 발견"), SearchResults.Num());
+    UE_LOG(LogTemp, Display, TEXT("검색 결과: %d개 항목 발견"), SearchResults.Num());
     
-	// 검색 결과가 있으면 첫 번째 결과로 스크롤 및 선택
-	if (SearchResults.Num() > 0)
-	{
-		// 결과 항목의 경로를 펼치고 항목 선택
-		ExpandPathToItem(SearchResults[0]);
-		TreeView->SetItemSelection(SearchResults[0], true);
-		TreeView->RequestScrollIntoView(SearchResults[0]);
-	}
+    // 검색 시작 시 모든 항목 접기
+    if (TreeView.IsValid())
+    {
+        for (auto& RootItem : AllRootItems)
+        {
+            TreeView->SetItemExpansion(RootItem, false);
+        }
+    }
     
-	// 트리뷰 갱신 (필터링 적용)
-	TreeView->RequestTreeRefresh();
+    // 검색 결과가 있으면 첫 번째 결과로 스크롤 및 선택하고 경로 펼치기
+    if (SearchResults.Num() > 0)
+    {
+        // 결과 항목의 경로를 펼치고 항목 선택
+        ExpandPathToItem(SearchResults[0]);
+        TreeView->SetItemSelection(SearchResults[0], true);
+        TreeView->RequestScrollIntoView(SearchResults[0]);
+    }
+    
+    // 트리뷰 갱신 (필터링 적용)
+    TreeView->RequestTreeRefresh();
 }
 
 // 항목이 검색어와 일치하는지 확인
