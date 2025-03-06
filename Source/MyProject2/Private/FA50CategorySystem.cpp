@@ -6,16 +6,16 @@
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/Paths.h"
 
-FFA50MCategoryMapper::FFA50MCategoryMapper()
+FFA50mCategoryMapper::FFA50mCategoryMapper()
     : bHasUnsavedChanges(false)
 {
 }
 
-FFA50MCategoryMapper::~FFA50MCategoryMapper()
+FFA50mCategoryMapper::~FFA50mCategoryMapper()
 {
 }
 
-bool FFA50MCategoryMapper::LoadMappingFile(const FString& FilePath)
+bool FFA50mCategoryMapper::LoadMappingFile(const FString& FilePath)
 {
     // 파일이 존재하는지 확인
     if (!FPlatformFileManager::Get().GetPlatformFile().FileExists(*FilePath))
@@ -68,7 +68,7 @@ bool FFA50MCategoryMapper::LoadMappingFile(const FString& FilePath)
         }
         
         // 매핑 추가
-        FFA50MPartCategory Category(MainCategory, SubCategory, Notes);
+        FFA50mPartCategory Category(MainCategory, SubCategory, Notes);
         PartCategoryMap.Add(PartNo, Category);
     }
     
@@ -77,7 +77,7 @@ bool FFA50MCategoryMapper::LoadMappingFile(const FString& FilePath)
     return true;
 }
 
-bool FFA50MCategoryMapper::SaveMappingFile(const FString& FilePath)
+bool FFA50mCategoryMapper::SaveMappingFile(const FString& FilePath)
 {
     // 저장할 문자열 배열 준비
     TArray<FString> Lines;
@@ -89,7 +89,7 @@ bool FFA50MCategoryMapper::SaveMappingFile(const FString& FilePath)
     for (const auto& Pair : PartCategoryMap)
     {
         const FString& PartNo = Pair.Key;
-        const FFA50MPartCategory& Category = Pair.Value;
+        const FFA50mPartCategory& Category = Pair.Value;
         
         // 카테고리를 문자열로 변환
         FString MainCategoryStr;
@@ -175,9 +175,9 @@ bool FFA50MCategoryMapper::SaveMappingFile(const FString& FilePath)
     return bSuccess;
 }
 
-bool FFA50MCategoryMapper::GetCategoryForPart(const FString& PartNo, FFA50MPartCategory& OutCategory)
+bool FFA50mCategoryMapper::GetCategoryForPart(const FString& PartNo, FFA50mPartCategory& OutCategory)
 {
-    const FFA50MPartCategory* FoundCategory = PartCategoryMap.Find(PartNo);
+    const FFA50mPartCategory* FoundCategory = PartCategoryMap.Find(PartNo);
     
     if (FoundCategory)
     {
@@ -186,11 +186,11 @@ bool FFA50MCategoryMapper::GetCategoryForPart(const FString& PartNo, FFA50MPartC
     }
     
     // 찾지 못하면 기본값 설정
-    OutCategory = FFA50MPartCategory();
+    OutCategory = FFA50mPartCategory();
     return false;
 }
 
-void FFA50MCategoryMapper::SetCategoryForPart(const FString& PartNo, const FFA50MPartCategory& Category)
+void FFA50mCategoryMapper::SetCategoryForPart(const FString& PartNo, const FFA50mPartCategory& Category)
 {
     // 기존 값과 다른 경우에만 변경 사항으로 처리
     if (!PartCategoryMap.Contains(PartNo) || !(PartCategoryMap[PartNo] == Category))
@@ -200,14 +200,14 @@ void FFA50MCategoryMapper::SetCategoryForPart(const FString& PartNo, const FFA50
     }
 }
 
-TArray<FString> FFA50MCategoryMapper::GetPartsByCategory(EFA50mSystemCategory MainCategory, uint8 SubCategory)
+TArray<FString> FFA50mCategoryMapper::GetPartsByCategory(EFA50mSystemCategory MainCategory, uint8 SubCategory)
 {
     TArray<FString> Result;
     
     for (const auto& Pair : PartCategoryMap)
     {
         const FString& PartNo = Pair.Key;
-        const FFA50MPartCategory& Category = Pair.Value;
+        const FFA50mPartCategory& Category = Pair.Value;
         
         // 주 카테고리가 일치하고, 하위 카테고리가 0이거나 일치하면 추가
         if (Category.MainCategory == MainCategory && 
@@ -220,12 +220,12 @@ TArray<FString> FFA50MCategoryMapper::GetPartsByCategory(EFA50mSystemCategory Ma
     return Result;
 }
 
-const TMap<FString, FFA50MPartCategory>& FFA50MCategoryMapper::GetAllMappings() const
+const TMap<FString, FFA50mPartCategory>& FFA50mCategoryMapper::GetAllMappings() const
 {
     return PartCategoryMap;
 }
 
-void FFA50MCategoryMapper::RemoveMapping(const FString& PartNo)
+void FFA50mCategoryMapper::RemoveMapping(const FString& PartNo)
 {
     if (PartCategoryMap.Remove(PartNo) > 0)
     {
@@ -233,7 +233,7 @@ void FFA50MCategoryMapper::RemoveMapping(const FString& PartNo)
     }
 }
 
-bool FFA50MCategoryMapper::HasUnsavedChanges() const
+bool FFA50mCategoryMapper::HasUnsavedChanges() const
 {
     return bHasUnsavedChanges;
 }

@@ -53,34 +53,34 @@ enum class EAvionicsSubsystem : uint8
 };
 
 // FA-50M 파트 카테고리 구조체
-struct FFA50MPartCategory
+struct FFA50mPartCategory
 {
     EFA50mSystemCategory MainCategory;
     uint8 SubCategory;
     FString Notes;
     
-    FFA50MPartCategory()
+    FFA50mPartCategory()
         : MainCategory(EFA50mSystemCategory::None)
         , SubCategory(0)
         , Notes(TEXT(""))
     {
     }
     
-    FFA50MPartCategory(EFA50mSystemCategory InMainCategory, uint8 InSubCategory, const FString& InNotes = TEXT(""))
+    FFA50mPartCategory(EFA50mSystemCategory InMainCategory, uint8 InSubCategory, const FString& InNotes = TEXT(""))
         : MainCategory(InMainCategory)
         , SubCategory(InSubCategory)
         , Notes(InNotes)
     {
     }
     
-    bool operator==(const FFA50MPartCategory& Other) const
+    bool operator==(const FFA50mPartCategory& Other) const
     {
         return MainCategory == Other.MainCategory && 
                SubCategory == Other.SubCategory && 
                Notes.Equals(Other.Notes);
     }
     
-    bool operator!=(const FFA50MPartCategory& Other) const
+    bool operator!=(const FFA50mPartCategory& Other) const
     {
         return !(*this == Other);
     }
@@ -172,11 +172,11 @@ public:
 };
 
 // FA-50M 카테고리 매퍼 클래스
-class FFA50MCategoryMapper
+class FFA50mCategoryMapper
 {
 public:
-    FFA50MCategoryMapper();
-    ~FFA50MCategoryMapper();
+    FFA50mCategoryMapper();
+    ~FFA50mCategoryMapper();
     
     // 매핑 파일 로드
     bool LoadMappingFile(const FString& FilePath);
@@ -185,16 +185,16 @@ public:
     bool SaveMappingFile(const FString& FilePath);
     
     // 파트 번호로 카테고리 조회
-    bool GetCategoryForPart(const FString& PartNo, FFA50MPartCategory& OutCategory);
+    bool GetCategoryForPart(const FString& PartNo, FFA50mPartCategory& OutCategory);
     
     // 파트 번호에 카테고리 설정
-    void SetCategoryForPart(const FString& PartNo, const FFA50MPartCategory& Category);
+    void SetCategoryForPart(const FString& PartNo, const FFA50mPartCategory& Category);
     
     // 특정 카테고리에 속하는 모든 파트 번호 조회
     TArray<FString> GetPartsByCategory(EFA50mSystemCategory MainCategory, uint8 SubCategory = 0);
     
     // 모든 매핑 데이터 반환
-    const TMap<FString, FFA50MPartCategory>& GetAllMappings() const;
+    const TMap<FString, FFA50mPartCategory>& GetAllMappings() const;
     
     // 매핑 삭제
     void RemoveMapping(const FString& PartNo);
@@ -204,7 +204,7 @@ public:
     
 private:
     // 파트 번호와 카테고리 매핑 맵
-    TMap<FString, FFA50MPartCategory> PartCategoryMap;
+    TMap<FString, FFA50mPartCategory> PartCategoryMap;
     
     // 저장되지 않은 변경사항 플래그
     bool bHasUnsavedChanges;
