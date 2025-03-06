@@ -166,8 +166,6 @@ void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
     // 이전에 빈 상태에서 첫 글자 입력 시 트리 접기 실행
     if (SearchText.IsEmpty() && !NewSearchText.IsEmpty())
     {
-        UE_LOG(LogTemp, Display, TEXT("검색 시작: 첫 글자 입력 - 트리 접기 시작"));
-        
         // 바로 실행하는 대신 다음 틱에 실행하도록 지연
         GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateLambda([this]() {
             FoldLevelZeroItems();
