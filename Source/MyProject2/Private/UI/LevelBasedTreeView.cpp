@@ -160,7 +160,6 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 		];
 }
 
-// OnSearchTextChanged 함수 수정 (SLevelBasedTreeView.cpp 파일)
 // OnSearchTextChanged 함수 수정
 void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
 {
@@ -315,7 +314,6 @@ void SLevelBasedTreeView::OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Ite
 }
 
 // 이미지 존재 여부 캐싱 함수
-// 이미지 존재 여부 캐싱 함수
 void SLevelBasedTreeView::CacheImageExistence()
 {
     // Set 및 맵 초기화
@@ -342,11 +340,7 @@ void SLevelBasedTreeView::CacheImageExistence()
     for (const FAssetData& Asset : AssetList)
     {
         FString AssetName = Asset.AssetName.ToString();
-<<<<<<< HEAD
-        FString AssetPath = Asset.GetObjectPathString();
-=======
     	FString AssetPath = Asset.GetObjectPathString();
->>>>>>> fbd308f9000078ee56a374049ba93fc62a830a22
         
         // 언더바로 문자열 분리
         TArray<FString> Parts;
