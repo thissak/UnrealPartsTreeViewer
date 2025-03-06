@@ -1,14 +1,15 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "MyProject2/Public/UI/LevelBasedTreeView.h"
-#include "SlateOptMacros.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
-#include "AssetRegistry/AssetRegistryModule.h"
-#include "Windows/WindowsPlatformApplicationMisc.h"
 #include "Widgets/Input/SSearchBox.h"
+#include "UI/PartMetadataWidget.h"
+#include "Windows/WindowsPlatformApplicationMisc.h"
+#include "SlateOptMacros.h"
 
 #if WITH_EDITOR
 #include "Editor.h"
@@ -25,6 +26,9 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     bFilteringImageNodes = false;
 	bIsSearching = false;  // 검색 상태 초기화
 	SearchText = "";       // 검색어 초기화
+
+    // 메타데이터 위젯 참조 저장
+    MetadataWidget = InArgs._MetadataWidget;
     
     // 이미지 브러시 초기화
     FSlateBrush* InitialBrush = new FSlateBrush();
@@ -332,6 +336,7 @@ void SLevelBasedTreeView::OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Ite
 }
 
 // 이미지 존재 여부 캐싱 함수
+// 이미지 존재 여부 캐싱 함수
 void SLevelBasedTreeView::CacheImageExistence()
 {
     // Set 및 맵 초기화
@@ -358,7 +363,7 @@ void SLevelBasedTreeView::CacheImageExistence()
     for (const FAssetData& Asset : AssetList)
     {
         FString AssetName = Asset.AssetName.ToString();
-        FString AssetPath = Asset.ObjectPath.ToString();
+        FString AssetPath = Asset.GetObjectPathString();
         
         // 언더바로 문자열 분리
         TArray<FString> Parts;
@@ -382,6 +387,13 @@ void SLevelBasedTreeView::CacheImageExistence()
     
     UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 완료: 이미지 있는 노드 %d개 / 전체 노드 %d개"), 
            PartsWithImageSet.Num(), PartNoToItemMap.Num());
+    
+    // 메타데이터 위젯에 이미지 관련 정보 전달
+    if (MetadataWidget.IsValid())
+    {
+        MetadataWidget->SetPartsWithImageSet(PartsWithImageSet);
+        MetadataWidget->SetPartImagePathMap(PartNoToImagePathMap);
+    }
 }
 
 // 선택된 항목 이미지 업데이트
@@ -879,10 +891,10 @@ FString SLevelBasedTreeView::GetSafeString(const FString& InStr) const
 
 void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESelectInfo::Type SelectInfo)
 {
-    // 선택 변경 시 이미지 업데이트
-    if (Item.IsValid())
+    // 선택 변경 시 메타데이터 위젯에 선택 항목 전달
+    if (Item.IsValid() && MetadataWidget.IsValid())
     {
-        UpdateSelectedItemImage();
+        MetadataWidget->SetSelectedItem(Item);
     }
 }
 
@@ -1287,92 +1299,35 @@ TSharedPtr<FPartTreeItem> SLevelBasedTreeView::FindParentItem(const TSharedPtr<F
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
-// 트리뷰 위젯 생성 헬퍼 함수
+// 트리뷰 위젯 생성 헬퍼 함수 - 모듈화된 버전
 void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr<SWidget>& OutMetadataWidget, const FString& ExcelFilePath)
 {
     UE_LOG(LogTemp, Display, TEXT("트리뷰 위젯 생성 시작: %s"), *ExcelFilePath);
     
+    // 메타데이터 위젯 생성
+    TSharedPtr<SPartMetadataWidget> MetadataWidget = SNew(SPartMetadataWidget);
+    
     // SLevelBasedTreeView 인스턴스 생성
     TSharedPtr<SLevelBasedTreeView> TreeView = SNew(SLevelBasedTreeView)
-        .ExcelFilePath(ExcelFilePath);
+        .ExcelFilePath(ExcelFilePath)
+        .MetadataWidget(MetadataWidget);
     
-	OutTreeViewWidget = SNew(SVerticalBox)
-		// 검색 위젯 추가
-		+ SVerticalBox::Slot()
-		.AutoHeight()
-		[
-			TreeView->GetSearchWidget()
-		]
-		// 트리뷰 위젯
-		+ SVerticalBox::Slot()
-		.FillHeight(1.0f)
-		[
-			TreeView.ToSharedRef()
-		];
-    
-    // 메타데이터 위젯에 이미지 위젯 추가
-    OutMetadataWidget = SNew(SBorder)
-        .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-        .Padding(FMargin(4.0f))
+    OutTreeViewWidget = SNew(SVerticalBox)
+        // 검색 위젯 추가
+        + SVerticalBox::Slot()
+        .AutoHeight()
         [
-            SNew(SVerticalBox)
-            
-            // 이미지 섹션 추가
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(2)
-            [
-                SNew(STextBlock)
-                .Text(FText::FromString("Item Image"))
-                .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
-            ]
-            
-            // 이미지 위젯 추가
-            + SVerticalBox::Slot()
-            .AutoHeight()  // 또는 적절한 높이 지정
-            .Padding(2)
-            [
-                SNew(SBorder)
-                .BorderImage(FAppStyle::GetBrush("ToolPanel.DarkGroupBorder"))
-               .Padding(FMargin(4.0f))
-               [
-                   TreeView->GetImageWidget()
-               ]
-           ]
-
-           // 분리선 추가
-           + SVerticalBox::Slot()
-           .AutoHeight()
-           .Padding(FMargin(2, 28))
-           [
-               SNew(SSeparator)
-               .Thickness(2.0f)
-               .SeparatorImage(FAppStyle::GetBrush("Menu.Separator"))
-           ]
-           
-           // 메타데이터 섹션 헤더
-           + SVerticalBox::Slot()
-           .AutoHeight()
-           .Padding(2)
-           [
-               SNew(STextBlock)
-               .Text(FText::FromString("Item Details"))
-               .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
-           ]
-           
-           // 메타데이터 내용
-           + SVerticalBox::Slot()
-           .FillHeight(1.0f)
-           .Padding(2)
-           [
-               SNew(SScrollBox)
-               + SScrollBox::Slot()
-               [
-                   // 메타데이터 내용 표시를 위한 기본 텍스트
-                  TreeView->GetMetadataWidget()
-              ]
-          ]
-      ];
-      
+            TreeView->GetSearchWidget()
+        ]
+        // 트리뷰 위젯
+        + SVerticalBox::Slot()
+        .FillHeight(1.0f)
+        [
+            TreeView.ToSharedRef()
+        ];
+    
+    // 메타데이터 위젯 설정
+    OutMetadataWidget = MetadataWidget.ToSharedRef();
+    
     UE_LOG(LogTemp, Display, TEXT("트리뷰 위젯 생성 완료"));
 }

@@ -11,6 +11,9 @@
 #include "Engine/Texture2D.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 
+// 전방 선언
+class SPartMetadataWidget;
+
 /**
  * 파트 트리 아이템 데이터 구조체
  * 트리뷰에 표시되는 각 항목을 나타냅니다.
@@ -65,11 +68,13 @@ struct FPartTreeItem
 class MYPROJECT2_API SLevelBasedTreeView : public SCompoundWidget
 {
 public:
-    SLATE_BEGIN_ARGS(SLevelBasedTreeView)
-        : _ExcelFilePath("")
-    {}
-        SLATE_ARGUMENT(FString, ExcelFilePath)  ///< CSV 파일 경로
-    SLATE_END_ARGS()
+	SLATE_BEGIN_ARGS(SLevelBasedTreeView)
+		: _ExcelFilePath("")
+		, _MetadataWidget(nullptr)
+	{}
+		SLATE_ARGUMENT(FString, ExcelFilePath)  ///< CSV 파일 경로
+		SLATE_ARGUMENT(TSharedPtr<SPartMetadataWidget>, MetadataWidget) ///< 메타데이터 위젯
+	SLATE_END_ARGS()
 
     //===== 초기화 및 기본 설정 =====//
     
@@ -147,6 +152,9 @@ private:
 	 bool bHasFoldedForCurrentSearch;
 	 TArray<TSharedPtr<FPartTreeItem>> SearchResults;
 	 void FoldLevelZeroItems();
+
+	/** 메타데이터 위젯 참조 */
+	TSharedPtr<SPartMetadataWidget> MetadataWidget;
 	
     //===== 트리뷰 및 데이터 관련 변수 =====//
     
