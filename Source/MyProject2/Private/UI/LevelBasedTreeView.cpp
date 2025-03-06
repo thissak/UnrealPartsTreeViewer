@@ -252,12 +252,9 @@ void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
                     ExpandPathToItem(SearchResults[0]);
                     TreeView->SetItemSelection(SearchResults[0], true);
                     TreeView->RequestScrollIntoView(SearchResults[0]);
-                    
-                    UE_LOG(LogTemp, Display, TEXT("검색 결과 경로 펼치기 완료: %s"), 
-                        *SearchResults[0]->PartNo);
                 }
             }),
-            0.2f,  // 0.2초 지연 (접기 후 펼치기 위한 시간 간격)
+            0.1f,  // 0.1초 지연 (접기 후 펼치기 위한 시간 간격)
             false  // 반복 없음
         );
     }
@@ -1137,10 +1134,6 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
             // 검색 결과 항목: 녹색, 굵은 글씨
             TextColor = FSlateColor(FLinearColor(0.2f, 0.8f, 0.2f)); // 밝은 녹색
             FontInfo = FCoreStyle::GetDefaultFontStyle("Bold", 9);
-            
-            // 디버깅 로그
-            UE_LOG(LogTemp, Display, TEXT("검색 결과 색상 적용: %s (검색어: %s)"), 
-                *Item->PartNo, *SearchText);
         }
     }
     else if (!bIsSearching)

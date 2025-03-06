@@ -57,7 +57,7 @@ bool FFA50MCategoryMapper::LoadMappingFile(const FString& FilePath)
         FString MainCategoryStr = Columns[1].TrimStartAndEnd();
         FString SubCategoryStr = Columns[2].TrimStartAndEnd();
         
-        EFA50MSystemCategory MainCategory = FA50MCategoryHelpers::GetCategoryFromString(MainCategoryStr);
+        EFA50mSystemCategory MainCategory = FA50MCategoryHelpers::GetCategoryFromString(MainCategoryStr);
         uint8 SubCategory = FA50MCategoryHelpers::GetSubCategoryFromString(MainCategory, SubCategoryStr);
         
         // 메모 필드 (선택사항)
@@ -98,22 +98,22 @@ bool FFA50MCategoryMapper::SaveMappingFile(const FString& FilePath)
         // 열거형 값을 문자열로 변환
         switch (Category.MainCategory)
         {
-            case EFA50MSystemCategory::FlightControl: MainCategoryStr = TEXT("FlightControl"); break;
-            case EFA50MSystemCategory::PowerManagement: MainCategoryStr = TEXT("PowerManagement"); break;
-            case EFA50MSystemCategory::EngineFuel: MainCategoryStr = TEXT("EngineFuel"); break;
-            case EFA50MSystemCategory::NavigationComm: MainCategoryStr = TEXT("NavigationComm"); break;
-            case EFA50MSystemCategory::WeaponsDefense: MainCategoryStr = TEXT("WeaponsDefense"); break;
-            case EFA50MSystemCategory::Lighting: MainCategoryStr = TEXT("Lighting"); break;
-            case EFA50MSystemCategory::Emergency: MainCategoryStr = TEXT("Emergency"); break;
-            case EFA50MSystemCategory::EnvironmentalControl: MainCategoryStr = TEXT("EnvironmentalControl"); break;
-            case EFA50MSystemCategory::DisplayRecording: MainCategoryStr = TEXT("DisplayRecording"); break;
-            case EFA50MSystemCategory::TestDiagnostics: MainCategoryStr = TEXT("TestDiagnostics"); break;
-            case EFA50MSystemCategory::Avionics: MainCategoryStr = TEXT("Avionics"); break;
+            case EFA50mSystemCategory::FlightControl: MainCategoryStr = TEXT("FlightControl"); break;
+            case EFA50mSystemCategory::PowerManagement: MainCategoryStr = TEXT("PowerManagement"); break;
+            case EFA50mSystemCategory::EngineFuel: MainCategoryStr = TEXT("EngineFuel"); break;
+            case EFA50mSystemCategory::NavigationComm: MainCategoryStr = TEXT("NavigationComm"); break;
+            case EFA50mSystemCategory::WeaponsDefense: MainCategoryStr = TEXT("WeaponsDefense"); break;
+            case EFA50mSystemCategory::Lighting: MainCategoryStr = TEXT("Lighting"); break;
+            case EFA50mSystemCategory::Emergency: MainCategoryStr = TEXT("Emergency"); break;
+            case EFA50mSystemCategory::EnvironmentalControl: MainCategoryStr = TEXT("EnvironmentalControl"); break;
+            case EFA50mSystemCategory::DisplayRecording: MainCategoryStr = TEXT("DisplayRecording"); break;
+            case EFA50mSystemCategory::TestDiagnostics: MainCategoryStr = TEXT("TestDiagnostics"); break;
+            case EFA50mSystemCategory::Avionics: MainCategoryStr = TEXT("Avionics"); break;
             default: MainCategoryStr = TEXT("None"); break;
         }
         
         // 하위 카테고리 문자열 생성 (주 카테고리에 따라 달라짐)
-        if (Category.MainCategory == EFA50MSystemCategory::FlightControl)
+        if (Category.MainCategory == EFA50mSystemCategory::FlightControl)
         {
             switch (static_cast<EFlightControlSubsystem>(Category.SubCategory))
             {
@@ -128,7 +128,7 @@ bool FFA50MCategoryMapper::SaveMappingFile(const FString& FilePath)
                 default: SubCategoryStr = TEXT("None"); break;
             }
         }
-        else if (Category.MainCategory == EFA50MSystemCategory::Avionics)
+        else if (Category.MainCategory == EFA50mSystemCategory::Avionics)
         {
             switch (static_cast<EAvionicsSubsystem>(Category.SubCategory))
             {
@@ -200,7 +200,7 @@ void FFA50MCategoryMapper::SetCategoryForPart(const FString& PartNo, const FFA50
     }
 }
 
-TArray<FString> FFA50MCategoryMapper::GetPartsByCategory(EFA50MSystemCategory MainCategory, uint8 SubCategory)
+TArray<FString> FFA50MCategoryMapper::GetPartsByCategory(EFA50mSystemCategory MainCategory, uint8 SubCategory)
 {
     TArray<FString> Result;
     

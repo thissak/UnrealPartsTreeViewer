@@ -7,7 +7,7 @@
 
 // FA-50M 시스템 주요 카테고리 열거형
 UENUM(BlueprintType)
-enum class EFA50MSystemCategory : uint8
+enum class EFA50mSystemCategory : uint8
 {
     None = 0,
     FlightControl,        // 비행 제어 시스템
@@ -55,18 +55,18 @@ enum class EAvionicsSubsystem : uint8
 // FA-50M 파트 카테고리 구조체
 struct FFA50MPartCategory
 {
-    EFA50MSystemCategory MainCategory;
+    EFA50mSystemCategory MainCategory;
     uint8 SubCategory;
     FString Notes;
     
     FFA50MPartCategory()
-        : MainCategory(EFA50MSystemCategory::None)
+        : MainCategory(EFA50mSystemCategory::None)
         , SubCategory(0)
         , Notes(TEXT(""))
     {
     }
     
-    FFA50MPartCategory(EFA50MSystemCategory InMainCategory, uint8 InSubCategory, const FString& InNotes = TEXT(""))
+    FFA50MPartCategory(EFA50mSystemCategory InMainCategory, uint8 InSubCategory, const FString& InNotes = TEXT(""))
         : MainCategory(InMainCategory)
         , SubCategory(InSubCategory)
         , Notes(InNotes)
@@ -91,39 +91,39 @@ class FA50MCategoryHelpers
 {
 public:
     // 문자열에서 주 카테고리 열거형 값 반환
-    static EFA50MSystemCategory GetCategoryFromString(const FString& CategoryStr)
+    static EFA50mSystemCategory GetCategoryFromString(const FString& CategoryStr)
     {
         if (CategoryStr.Equals(TEXT("FlightControl"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::FlightControl;
+            return EFA50mSystemCategory::FlightControl;
         else if (CategoryStr.Equals(TEXT("PowerManagement"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::PowerManagement;
+            return EFA50mSystemCategory::PowerManagement;
         else if (CategoryStr.Equals(TEXT("EngineFuel"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::EngineFuel;
+            return EFA50mSystemCategory::EngineFuel;
         else if (CategoryStr.Equals(TEXT("NavigationComm"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::NavigationComm;
+            return EFA50mSystemCategory::NavigationComm;
         else if (CategoryStr.Equals(TEXT("WeaponsDefense"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::WeaponsDefense;
+            return EFA50mSystemCategory::WeaponsDefense;
         else if (CategoryStr.Equals(TEXT("Lighting"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::Lighting;
+            return EFA50mSystemCategory::Lighting;
         else if (CategoryStr.Equals(TEXT("Emergency"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::Emergency;
+            return EFA50mSystemCategory::Emergency;
         else if (CategoryStr.Equals(TEXT("EnvironmentalControl"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::EnvironmentalControl;
+            return EFA50mSystemCategory::EnvironmentalControl;
         else if (CategoryStr.Equals(TEXT("DisplayRecording"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::DisplayRecording;
+            return EFA50mSystemCategory::DisplayRecording;
         else if (CategoryStr.Equals(TEXT("TestDiagnostics"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::TestDiagnostics;
+            return EFA50mSystemCategory::TestDiagnostics;
         else if (CategoryStr.Equals(TEXT("Avionics"), ESearchCase::IgnoreCase))
-            return EFA50MSystemCategory::Avionics;
+            return EFA50mSystemCategory::Avionics;
         
-        return EFA50MSystemCategory::None;
+        return EFA50mSystemCategory::None;
     }
     
     // 문자열에서 하위 카테고리 값 반환 (주 카테고리에 따라 다름)
-    static uint8 GetSubCategoryFromString(EFA50MSystemCategory MainCategory, const FString& SubCategoryStr)
+    static uint8 GetSubCategoryFromString(EFA50mSystemCategory MainCategory, const FString& SubCategoryStr)
     {
         // 비행 제어 하위 카테고리
-        if (MainCategory == EFA50MSystemCategory::FlightControl)
+        if (MainCategory == EFA50mSystemCategory::FlightControl)
         {
             if (SubCategoryStr.Equals(TEXT("FLCS"), ESearchCase::IgnoreCase))
                 return static_cast<uint8>(EFlightControlSubsystem::FLCS);
@@ -143,7 +143,7 @@ public:
                 return static_cast<uint8>(EFlightControlSubsystem::StabilityAugmentation);
         }
         // 항공전자 하위 카테고리 (FA-50M 전용)
-        else if (MainCategory == EFA50MSystemCategory::Avionics)
+        else if (MainCategory == EFA50mSystemCategory::Avionics)
         {
             if (SubCategoryStr.Equals(TEXT("MFD"), ESearchCase::IgnoreCase))
                 return static_cast<uint8>(EAvionicsSubsystem::MFD);
@@ -191,7 +191,7 @@ public:
     void SetCategoryForPart(const FString& PartNo, const FFA50MPartCategory& Category);
     
     // 특정 카테고리에 속하는 모든 파트 번호 조회
-    TArray<FString> GetPartsByCategory(EFA50MSystemCategory MainCategory, uint8 SubCategory = 0);
+    TArray<FString> GetPartsByCategory(EFA50mSystemCategory MainCategory, uint8 SubCategory = 0);
     
     // 모든 매핑 데이터 반환
     const TMap<FString, FFA50MPartCategory>& GetAllMappings() const;

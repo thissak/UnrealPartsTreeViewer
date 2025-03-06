@@ -9,8 +9,8 @@ public:
     virtual void StartupModule() override;
     virtual void ShutdownModule() override;
 
-    void ResisterMenu();
-    void ResisterMenusCallback();
+    void RegisterMenu();
+    void RegisterMenusCallback();
 
     void OnToolButtonClicked();
 
