@@ -247,12 +247,12 @@ private:
      * 모든 파트의 이미지 존재 여부를 미리 확인하고 캐싱합니다.
      */
     void CacheImageExistence();
-    
-    /**
-     * 빈 브러시 설정 헬퍼 함수
-     * @param Brush - 설정할 브러시
-     */
-    void SetupEmptyBrush(FSlateBrush* Brush);
+
+	bool HasImage(const FString& PartNo) const;
+	
+	// 이미지 관련 유틸리티 함수
+	TSharedPtr<FSlateBrush> CreateImageBrush(UTexture2D* Texture = nullptr);
+	UTexture2D* LoadPartImage(const FString& PartNo);
     
     /**
      * CSV 파일 읽기 함수

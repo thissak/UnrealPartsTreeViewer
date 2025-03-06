@@ -31,13 +31,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     MetadataWidget = InArgs._MetadataWidget;
     
     // 이미지 브러시 초기화
-    FSlateBrush* InitialBrush = new FSlateBrush();
-    InitialBrush->DrawAs = ESlateBrushDrawType::NoDrawType;
-    InitialBrush->Tiling = ESlateBrushTileType::NoTile;
-    InitialBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
-    InitialBrush->ImageSize = FVector2D(400, 300);
-    
-    CurrentImageBrush = MakeShareable(InitialBrush);
+	CurrentImageBrush = CreateImageBrush(nullptr);
     
     // 위젯 구성
     ChildSlot
@@ -64,16 +58,6 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     {
         BuildTreeView(InArgs._ExcelFilePath);
     }
-}
-
-// 빈 브러시 설정을 위한 헬퍼 함수
-void SLevelBasedTreeView::SetupEmptyBrush(FSlateBrush* Brush)
-{
-    Brush->SetResourceObject(nullptr);
-    Brush->ImageSize = FVector2D(400, 300);
-    Brush->DrawAs = ESlateBrushDrawType::NoDrawType;
-    
-    CurrentImageBrush = MakeShareable(Brush);
 }
 
 // 액터 선택 함수
@@ -186,8 +170,6 @@ void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
     // 이전에 빈 상태에서 첫 글자 입력 시 트리 접기 실행
     if (SearchText.IsEmpty() && !NewSearchText.IsEmpty())
     {
-        UE_LOG(LogTemp, Display, TEXT("검색 시작: 첫 글자 입력 - 트리 접기 시작"));
-        
         // 바로 실행하는 대신 다음 틱에 실행하도록 지연
         GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateLambda([this]() {
             FoldLevelZeroItems();
@@ -256,12 +238,9 @@ void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
                     ExpandPathToItem(SearchResults[0]);
                     TreeView->SetItemSelection(SearchResults[0], true);
                     TreeView->RequestScrollIntoView(SearchResults[0]);
-                    
-                    UE_LOG(LogTemp, Display, TEXT("검색 결과 경로 펼치기 완료: %s"), 
-                        *SearchResults[0]->PartNo);
                 }
             }),
-            0.2f,  // 0.2초 지연 (접기 후 펼치기 위한 시간 간격)
+            0.1f,  // 0.1초 지연 (접기 후 펼치기 위한 시간 간격)
             false  // 반복 없음
         );
     }
@@ -363,7 +342,11 @@ void SLevelBasedTreeView::CacheImageExistence()
     for (const FAssetData& Asset : AssetList)
     {
         FString AssetName = Asset.AssetName.ToString();
+<<<<<<< HEAD
         FString AssetPath = Asset.GetObjectPathString();
+=======
+    	FString AssetPath = Asset.GetObjectPathString();
+>>>>>>> fbd308f9000078ee56a374049ba93fc62a830a22
         
         // 언더바로 문자열 분리
         TArray<FString> Parts;
@@ -396,70 +379,88 @@ void SLevelBasedTreeView::CacheImageExistence()
     }
 }
 
+// 이미지 존재 여부 확인 헬퍼 함수
+bool SLevelBasedTreeView::HasImage(const FString& PartNo) const
+{
+	return PartsWithImageSet.Contains(PartNo);
+}
+
+// 브러시 생성/설정을 위한 유틸리티 함수
+TSharedPtr<FSlateBrush> SLevelBasedTreeView::CreateImageBrush(UTexture2D* Texture)
+{
+	FSlateBrush* NewBrush = new FSlateBrush();
+	NewBrush->DrawAs = ESlateBrushDrawType::Image;
+	NewBrush->Tiling = ESlateBrushTileType::NoTile;
+	NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
+    
+	if (Texture)
+	{
+		NewBrush->SetResourceObject(Texture);
+		NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+	}
+	else
+	{
+		NewBrush->DrawAs = ESlateBrushDrawType::NoDrawType;
+		NewBrush->ImageSize = FVector2D(400, 300);
+	}
+    
+	return MakeShareable(NewBrush);
+}
+
+// 이미지 존재 확인 및 로드를 위한 함수
+UTexture2D* SLevelBasedTreeView::LoadPartImage(const FString& PartNo)
+{
+	if (!PartsWithImageSet.Contains(PartNo))
+	{
+		return nullptr;
+	}
+    
+	FString* AssetPathPtr = PartNoToImagePathMap.Find(PartNo);
+	FString AssetPath;
+    
+	if (AssetPathPtr)
+	{
+		AssetPath = *AssetPathPtr;
+	}
+	else
+	{
+		// 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
+		AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNo);
+	}
+    
+	// 에셋 로드 시도
+	UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
+    
+	if (!Texture)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
+	}
+    
+	return Texture;
+}
+
 // 선택된 항목 이미지 업데이트
 void SLevelBasedTreeView::UpdateSelectedItemImage()
 {
-    // 선택된 항목 가져오기
-    TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
+	// 선택된 항목 가져오기
+	TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
     
-    if (SelectedItems.Num() == 0 || !ItemImageWidget.IsValid())
-    {
-        return;
-    }
+	if (SelectedItems.Num() == 0 || !ItemImageWidget.IsValid())
+	{
+		return;
+	}
     
-    TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
-    FString PartNoStr = SelectedItem->PartNo;
+	TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
+	FString PartNoStr = SelectedItem->PartNo;
     
-    // 새 브러시 생성
-    FSlateBrush* NewBrush = new FSlateBrush();
-    NewBrush->DrawAs = ESlateBrushDrawType::Image;
-    NewBrush->Tiling = ESlateBrushTileType::NoTile;
-    NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
+	// 이미지 로드 시도
+	UTexture2D* Texture = LoadPartImage(PartNoStr);
     
-    // Set을 확인하여 이미지가 있는지 미리 확인
-    if (PartsWithImageSet.Contains(PartNoStr))
-    {
-        // 저장된 실제 이미지 경로 사용
-        FString* AssetPathPtr = PartNoToImagePathMap.Find(PartNoStr);
-        FString AssetPath;
-        
-        if (AssetPathPtr)
-        {
-            AssetPath = *AssetPathPtr;
-        }
-        else
-        {
-            // 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
-            AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNoStr);
-        }
-        
-        // 에셋 로드 시도
-        UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
-        
-        if (Texture)
-        {
-            // 새 브러시에 텍스처 설정
-            NewBrush->SetResourceObject(Texture);
-            NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
-            
-            // 현재 브러시를 새 브러시로 교체
-            CurrentImageBrush = MakeShareable(NewBrush);
-        }
-        else
-        {
-            // 이미지가 로드되지 않음 - 빈 브러시 설정
-            SetupEmptyBrush(NewBrush);
-            UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
-        }
-    }
-    else
-    {
-        // 이미지가 없음 - 빈 브러시 설정
-        SetupEmptyBrush(NewBrush);
-    }
+	// 브러시 생성 및 설정
+	CurrentImageBrush = CreateImageBrush(Texture);
     
-    // 이미지 위젯에 새 브러시 설정
-    ItemImageWidget->SetImage(CurrentImageBrush.Get());
+	// 이미지 위젯에 새 브러시 설정
+	ItemImageWidget->SetImage(CurrentImageBrush.Get());
 }
 
 // 컨텍스트 메뉴 생성
@@ -1149,10 +1150,6 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
             // 검색 결과 항목: 녹색, 굵은 글씨
             TextColor = FSlateColor(FLinearColor(0.2f, 0.8f, 0.2f)); // 밝은 녹색
             FontInfo = FCoreStyle::GetDefaultFontStyle("Bold", 9);
-            
-            // 디버깅 로그
-            UE_LOG(LogTemp, Display, TEXT("검색 결과 색상 적용: %s (검색어: %s)"), 
-                *Item->PartNo, *SearchText);
         }
     }
     else if (!bIsSearching)

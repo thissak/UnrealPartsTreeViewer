@@ -12,7 +12,7 @@
 
 void FMyProject2EditorModule::StartupModule()
 {
-    ResisterMenu();
+    RegisterMenu();
 }
 
 void FMyProject2EditorModule::ShutdownModule()
@@ -28,12 +28,12 @@ void FMyProject2EditorModule::ShutdownModule()
     }
 }
 
-void FMyProject2EditorModule::ResisterMenu()
+void FMyProject2EditorModule::RegisterMenu()
 {
-    UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FMyProject2EditorModule::ResisterMenusCallback));
+    UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FMyProject2EditorModule::RegisterMenusCallback));
 }
 
-void FMyProject2EditorModule::ResisterMenusCallback()
+void FMyProject2EditorModule::RegisterMenusCallback()
 {
     FToolMenuOwnerScoped OwnerScoped(this);
 
