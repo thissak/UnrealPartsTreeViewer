@@ -8,18 +8,18 @@
 #include "Widgets/Layout/SBox.h"
 #include "Engine/Engine.h"
 
-FTreeViewSearchModule::FTreeViewSearchModule(const TMap<FString, TSharedPtr<FPartTreeItem>>& InPartNoToItemMap)
+STreeViewSearchWidget::STreeViewSearchWidget(const TMap<FString, TSharedPtr<FPartTreeItem>>& InPartNoToItemMap)
     : bIsSearching(false)
     , SearchText("")
     , PartNoToItemMap(InPartNoToItemMap)
 {
 }
 
-FTreeViewSearchModule::~FTreeViewSearchModule()
+STreeViewSearchWidget::~STreeViewSearchWidget()
 {
 }
 
-TSharedRef<SWidget> FTreeViewSearchModule::CreateSearchWidget()
+TSharedRef<SWidget> STreeViewSearchWidget::CreateSearchWidget()
 {
     return SNew(SBorder)
         .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
@@ -48,8 +48,8 @@ TSharedRef<SWidget> FTreeViewSearchModule::CreateSearchWidget()
                 [
                     SNew(SSearchBox)
                     .HintText(FText::FromString("Enter text to search..."))
-                    .OnTextChanged(this, &FTreeViewSearchModule::OnSearchTextChanged)
-                    .OnTextCommitted(this, &FTreeViewSearchModule::OnSearchTextCommitted)
+                    .OnTextChanged(this, &STreeViewSearchWidget::OnSearchTextChanged)
+                    .OnTextCommitted(this, &STreeViewSearchWidget::OnSearchTextCommitted)
                 ]
             ]
             
@@ -74,7 +74,7 @@ TSharedRef<SWidget> FTreeViewSearchModule::CreateSearchWidget()
         ];
 }
 
-void FTreeViewSearchModule::OnSearchTextChanged(const FText& InText)
+void STreeViewSearchWidget::OnSearchTextChanged(const FText& InText)
 {
     // 새 검색어
     FString NewSearchText = InText.ToString();
@@ -109,7 +109,7 @@ void FTreeViewSearchModule::OnSearchTextChanged(const FText& InText)
     }
 }
 
-void FTreeViewSearchModule::OnSearchTextCommitted(const FText& InText, ETextCommit::Type CommitType)
+void STreeViewSearchWidget::OnSearchTextCommitted(const FText& InText, ETextCommit::Type CommitType)
 {
     if (CommitType == ETextCommit::OnEnter)
     {
@@ -122,32 +122,32 @@ void FTreeViewSearchModule::OnSearchTextCommitted(const FText& InText, ETextComm
     }
 }
 
-void FTreeViewSearchModule::SetOnSearchResultsReadyDelegate(FOnSearchResultsReady InDelegate)
+void STreeViewSearchWidget::SetOnSearchResultsReadyDelegate(FOnSearchResultsReady InDelegate)
 {
     OnSearchResultsReadyDelegate = InDelegate;
 }
 
-void FTreeViewSearchModule::SetOnSearchModeChangedDelegate(FOnSearchModeChanged InDelegate)
+void STreeViewSearchWidget::SetOnSearchModeChangedDelegate(FOnSearchModeChanged InDelegate)
 {
     OnSearchModeChangedDelegate = InDelegate;
 }
 
-bool FTreeViewSearchModule::IsSearching() const
+bool STreeViewSearchWidget::IsSearching() const
 {
     return bIsSearching;
 }
 
-const FString& FTreeViewSearchModule::GetSearchText() const
+const FString& STreeViewSearchWidget::GetSearchText() const
 {
     return SearchText;
 }
 
-const TArray<TSharedPtr<FPartTreeItem>>& FTreeViewSearchModule::GetSearchResults() const
+const TArray<TSharedPtr<FPartTreeItem>>& STreeViewSearchWidget::GetSearchResults() const
 {
     return SearchResults;
 }
 
-void FTreeViewSearchModule::PerformSearch(const FString& InSearchText)
+void STreeViewSearchWidget::PerformSearch(const FString& InSearchText)
 {
     // 검색 결과 초기화
     SearchResults.Empty();
@@ -178,7 +178,7 @@ void FTreeViewSearchModule::PerformSearch(const FString& InSearchText)
     }
 }
 
-void FTreeViewSearchModule::ResetSearch()
+void STreeViewSearchWidget::ResetSearch()
 {
     SearchText = "";
     bIsSearching = false;
@@ -191,7 +191,7 @@ void FTreeViewSearchModule::ResetSearch()
     }
 }
 
-bool FTreeViewSearchModule::DoesItemMatchSearch(const TSharedPtr<FPartTreeItem>& Item, const FString& InSearchText)
+bool STreeViewSearchWidget::DoesItemMatchSearch(const TSharedPtr<FPartTreeItem>& Item, const FString& InSearchText)
 {
     // 대소문자 구분 없이 검색하기 위해 모든 문자열을 소문자로 변환
     FString LowerPartNo = Item->PartNo.ToLower();
@@ -204,7 +204,7 @@ bool FTreeViewSearchModule::DoesItemMatchSearch(const TSharedPtr<FPartTreeItem>&
            LowerNomenclature.Contains(InSearchText);
 }
 
-void FTreeViewSearchModule::FilterSearchResults()
+void STreeViewSearchWidget::FilterSearchResults()
 {
     // 검색 결과가 너무 많으면 제한
     if (SearchResults.Num() > MaxSearchResultsToDisplay)

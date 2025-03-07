@@ -23,19 +23,24 @@ DECLARE_DELEGATE_OneParam(FOnSearchModeChanged, bool);
  * 트리뷰 검색 모듈 클래스
  * 파트 트리뷰의 검색 기능을 담당하는 모듈 클래스입니다.
  */
-class MYPROJECT2_API FTreeViewSearchModule
+class MYPROJECT2_API STreeViewSearchWidget : public SCompoundWidget
 {
 public:
+    SLATE_BEGIN_ARGS(STreeViewSearchWidget)
+    {}
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs, const TMap<FString, TSharedPtr<FPartTreeItem>>& InPartNoToItemMap);
     /**
      * 생성자
      * @param InPartNoToItemMap - 파트 번호별 항목 맵 참조
      */
-    FTreeViewSearchModule(const TMap<FString, TSharedPtr<FPartTreeItem>>& InPartNoToItemMap);
+    STreeViewSearchWidget(const TMap<FString, TSharedPtr<FPartTreeItem>>& InPartNoToItemMap);
     
     /**
      * 소멸자
      */
-    ~FTreeViewSearchModule();
+    ~STreeViewSearchWidget();
     
     /**
      * 검색 위젯 생성 함수
@@ -138,7 +143,7 @@ private:
 
 /**
  * 트리뷰 검색 모듈 인터페이스 클래스
- * SLevelBasedTreeView와 FTreeViewSearchModule 간의 통신을 위한 인터페이스입니다.
+ * SLevelBasedTreeView와 SFTreeViewSearchModule 간의 통신을 위한 인터페이스입니다.
  */
 class MYPROJECT2_API ITreeViewSearchHandler
 {
