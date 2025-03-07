@@ -40,7 +40,7 @@ public:
     /**
      * 소멸자
      */
-    ~STreeViewSearchWidget();
+    virtual ~STreeViewSearchWidget() override;
     
     /**
      * 검색 위젯 생성 함수

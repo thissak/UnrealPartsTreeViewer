@@ -1,7 +1,7 @@
 ﻿// TreeViewSearchModule.cpp
 // 파트 트리뷰 검색 기능을 위한 모듈 구현
 
-#include "UI/TreeViewSearchModule.h"
+#include "UI/TreeViewSearchWidget.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Layout/SBorder.h"
@@ -18,10 +18,18 @@ STreeViewSearchWidget::STreeViewSearchWidget(const TMap<FString, TSharedPtr<FPar
 STreeViewSearchWidget::~STreeViewSearchWidget()
 {
 }
-
-TSharedRef<SWidget> STreeViewSearchWidget::CreateSearchWidget()
+void STreeViewSearchWidget::Construct(const FArguments& InArgs, const TMap<FString, TSharedPtr<FPartTreeItem>>& InPartNoToItemMap)
 {
-    return SNew(SBorder)
+    // 변수 초기화
+    bIsSearching = false;
+    SearchText = "";
+    
+    // OnSearchResultsReady 및 OnSearchModeChanged 델리게이트 설정 부분 추가
+    
+    // UI 위젯 구성
+    ChildSlot
+    [
+        SNew(SBorder)
         .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
         .Padding(FMargin(4.0f))
         [
@@ -71,7 +79,8 @@ TSharedRef<SWidget> STreeViewSearchWidget::CreateSearchWidget()
                     return (bIsSearching && !SearchText.IsEmpty()) ? EVisibility::Visible : EVisibility::Collapsed;
                 })
             ]
-        ];
+        ]
+    ];
 }
 
 void STreeViewSearchWidget::OnSearchTextChanged(const FText& InText)
