@@ -208,7 +208,7 @@ private:
      * 트리뷰 항목 더블클릭 이벤트 핸들러
      * @param Item - 더블클릭된 항목
      */
-    void OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Item);
+    void OnTreeItemDoubleClick(TSharedPtr<FPartTreeItem> Item);
     
     /**
      * 컨텍스트 메뉴 생성 함수

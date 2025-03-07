@@ -43,7 +43,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
             .OnGetChildren(this, &SLevelBasedTreeView::OnGetChildren)
             .OnSelectionChanged(this, &SLevelBasedTreeView::OnSelectionChanged)
             .OnContextMenuOpening(this, &SLevelBasedTreeView::OnContextMenuOpening)
-            .OnMouseButtonDoubleClick(this, &SLevelBasedTreeView::OnMouseButtonDoubleClick)
+            .OnMouseButtonDoubleClick(this, &SLevelBasedTreeView::OnTreeItemDoubleClick)
             .HeaderRow
             (
                 SNew(SHeaderRow)
@@ -304,7 +304,7 @@ void SLevelBasedTreeView::OnSearchTextCommitted(const FText& InText, ETextCommit
 }
 
 
-void SLevelBasedTreeView::OnMouseButtonDoubleClick(TSharedPtr<FPartTreeItem> Item)
+void SLevelBasedTreeView::OnTreeItemDoubleClick(TSharedPtr<FPartTreeItem> Item)
 {
     if (Item.IsValid())
     {
