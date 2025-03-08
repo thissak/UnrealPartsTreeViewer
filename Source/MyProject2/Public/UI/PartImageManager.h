@@ -17,8 +17,7 @@ struct FSlateBrush;
 class MYPROJECT2_API FPartImageManager
 {
 public:
-	/** 싱글톤 인스턴스 가져오기 */
-	static FPartImageManager& Get();
+	FPartImageManager();
 
 	/** 인스턴스 초기화 (모듈 시작 시 호출) */
 	void Initialize();
@@ -67,12 +66,6 @@ public:
 	bool FilterItemsByImage(TSharedPtr<FPartTreeItem> Item);
 
 private:
-	/** 생성자 (private) */
-	FPartImageManager();
-
-	/** 싱글톤 인스턴스 */
-	static FPartImageManager* Instance;
-
 	/** 이미지가 있는 파트 번호 집합 */
 	TSet<FString> PartsWithImageSet;
 

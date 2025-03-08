@@ -1,6 +1,8 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "UI/PartMetadataWidget.h"
+
+#include "ServiceLocator.h"
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체를 위해 필요
 #include "UI/PartImageManager.h"
 #include "SlateOptMacros.h"
@@ -12,7 +14,7 @@ BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 void SPartMetadataWidget::Construct(const FArguments& InArgs)
 {
     // 기본 이미지 브러시 초기화
-    CurrentImageBrush = FPartImageManager::Get().CreateImageBrush(nullptr);
+    CurrentImageBrush = FServiceLocator::GetImageManager()->CreateImageBrush(nullptr);
 
     // 위젯 구성
     ChildSlot
@@ -132,10 +134,10 @@ void SPartMetadataWidget::UpdateImage()
     FString PartNoStr = SelectedItem->PartNo;
     
     // 이미지 로드 시도 (FPartImageManager 사용)
-    UTexture2D* Texture = FPartImageManager::Get().LoadPartImage(PartNoStr);
+    UTexture2D* Texture = FServiceLocator::GetImageManager()->LoadPartImage(PartNoStr);
     
     // 브러시 생성 및 설정
-    CurrentImageBrush = FPartImageManager::Get().CreateImageBrush(Texture);
+    CurrentImageBrush = FServiceLocator::GetImageManager()->CreateImageBrush(Texture);
     
     // 이미지 위젯에 새 브러시 설정
     ItemImageWidget->SetImage(CurrentImageBrush.Get());

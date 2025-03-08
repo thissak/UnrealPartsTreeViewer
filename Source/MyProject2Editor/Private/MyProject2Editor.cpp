@@ -7,12 +7,17 @@
 #include "Widgets/Docking/SDockTab.h"
 #include "ToolMenus.h"
 #include "UI/LevelBasedTreeView.h"
+#include "ServiceLocator.h"
 
 #define LOCTEXT_NAMESPACE "FMyProject2EditorModule"
 
 void FMyProject2EditorModule::StartupModule()
 {
     RegisterMenu();
+    // 이미지 매니저 인스턴스 생성 및 등록
+    FPartImageManager* ImageManager = new FPartImageManager();
+    ImageManager->Initialize();
+    FServiceLocator::RegisterImageManager(ImageManager);
 }
 
 void FMyProject2EditorModule::ShutdownModule()
@@ -25,6 +30,14 @@ void FMyProject2EditorModule::ShutdownModule()
     {
         // 모듈 내 윈도우 참조 제거
         TreeViewWindow = nullptr;
+    }
+
+    // 정리 작업
+    FPartImageManager* ImageManager = FServiceLocator::GetImageManager();
+    if (ImageManager)
+    {
+        delete ImageManager;
+        FServiceLocator::RegisterImageManager(nullptr);
     }
 }
 

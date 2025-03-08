@@ -4,7 +4,7 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UI/PartMetadataWidget.h"
 #include "UI/TreeViewUtils.h"
-#include "UI/PartImageManager.h"
+#include "ServiceLocator.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
@@ -33,7 +33,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     MetadataWidget = InArgs._MetadataWidget;
     
     // 이미지 브러시 초기화
-	CurrentImageBrush = FPartImageManager::Get().CreateImageBrush(nullptr);
+	CurrentImageBrush = FServiceLocator::GetImageManager()->CreateImageBrush(nullptr);
     
     // 위젯 구성
     ChildSlot
@@ -338,10 +338,10 @@ void SLevelBasedTreeView::UpdateSelectedItemImage()
 	FString PartNoStr = SelectedItem->PartNo;
     
 	// 이미지 로드 시도 (이제 FPartImageManager 사용)
-	UTexture2D* Texture = FPartImageManager::Get().LoadPartImage(PartNoStr);
+	UTexture2D* Texture = FServiceLocator::GetImageManager()->LoadPartImage(PartNoStr);
     
 	// 브러시 생성 및 설정
-	CurrentImageBrush = FPartImageManager::Get().CreateImageBrush(Texture);
+	CurrentImageBrush = FServiceLocator::GetImageManager()->CreateImageBrush(Texture);
     
 	// 이미지 위젯에 새 브러시 설정
 	ItemImageWidget->SetImage(CurrentImageBrush.Get());
@@ -369,7 +369,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                 }),
                 FCanExecuteAction::CreateLambda([this]() { 
                     // 이미 필터링 중이면 비활성화
-                    return !bFilteringImageNodes && FPartImageManager::Get().GetPartsWithImageSet().Num() > 0; 
+                    return !bFilteringImageNodes && FServiceLocator::GetImageManager()->GetPartsWithImageSet().Num() > 0; 
                 }),
                 FIsActionChecked::CreateLambda([this]() {
                     return bFilteringImageNodes;
@@ -454,7 +454,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
         );
         
         // 이미지 보기 (이미지가 있는 항목인 경우에만 활성화)
-        bool bHasImage = SelectedItem.IsValid() && FPartImageManager::Get().HasImage(SelectedItem->PartNo);
+        bool bHasImage = SelectedItem.IsValid() && FServiceLocator::GetImageManager()->HasImage(SelectedItem->PartNo);
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("이미지 보기")),
             FText::FromString(TEXT("선택한 항목의 이미지를 봅니다")),
@@ -577,7 +577,7 @@ void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
     bFilteringImageNodes = bEnable;
     
     UE_LOG(LogTemp, Display, TEXT("이미지 필터링 %s: 이미지 있는 파트 %d개"), 
-        bEnable ? TEXT("활성화") : TEXT("비활성화"), FPartImageManager::Get().GetPartsWithImageSet().Num());
+        bEnable ? TEXT("활성화") : TEXT("비활성화"), FServiceLocator::GetImageManager()->GetPartsWithImageSet().Num());
     
     // OnGetChildren 함수에서 필터링하도록 트리뷰 갱신만 요청
     if (TreeView.IsValid())
@@ -699,7 +699,7 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     BuildTreeStructure();
     
     // 이미지 존재 여부 캐싱 (FPartImageManager 사용)
-    FPartImageManager::Get().CacheImageExistence(PartNoToItemMap);
+    FServiceLocator::GetImageManager()->CacheImageExistence(PartNoToItemMap);
     
     // 트리뷰 갱신
     if (TreeView.IsValid())
@@ -725,8 +725,8 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     UE_LOG(LogTemp, Display, TEXT("- 루트 노드 수: %d개"), AllRootItems.Num());
     UE_LOG(LogTemp, Display, TEXT("- 최대 레벨 깊이: %d"), MaxLevel);
     UE_LOG(LogTemp, Display, TEXT("- 이미지 있는 노드 수: %d개 (%.1f%%)"), 
-           FPartImageManager::Get().GetPartsWithImageSet().Num(), 
-           (TotalNodeCount > 0) ? (float)FPartImageManager::Get().GetPartsWithImageSet().Num() / TotalNodeCount * 100.0f : 0.0f);
+           FServiceLocator::GetImageManager()->GetPartsWithImageSet().Num(), 
+           (TotalNodeCount > 0) ? (float)FServiceLocator::GetImageManager()->GetPartsWithImageSet().Num() / TotalNodeCount * 100.0f : 0.0f);
     
     // 각 레벨별 노드 갯수 출력
     for (int32 Level = 0; Level <= MaxLevel; ++Level)
@@ -934,7 +934,7 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
     else if (!bIsSearching)
     {
         // 검색 중이 아닌 경우 이미지 있는 항목은 빨간색
-        if (FPartImageManager::Get().HasImage(Item->PartNo))
+        if (FServiceLocator::GetImageManager()->HasImage(Item->PartNo))
         {
             TextColor = FSlateColor(FLinearColor::Red);
         }
@@ -996,7 +996,7 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
         // 이미지 필터링 (FTreeViewUtils 사용)
         for (const auto& Child : Item->Children)
         {
-            if (FPartImageManager::Get().HasImage(Child->PartNo) || FPartImageManager::Get().HasChildWithImage(Child))
+            if (FServiceLocator::GetImageManager()->HasImage(Child->PartNo) || FServiceLocator::GetImageManager()->HasChildWithImage(Child))
             {
                 OutChildren.Add(Child);
             }

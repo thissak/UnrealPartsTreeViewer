@@ -7,18 +7,6 @@
 #include "Engine/Texture2D.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 
-// FPartImageManager 싱글톤 구현
-FPartImageManager* FPartImageManager::Instance = nullptr;
-
-FPartImageManager& FPartImageManager::Get()
-{
-    if (Instance == nullptr)
-    {
-        Instance = new FPartImageManager();
-    }
-    return *Instance;
-}
-
 FPartImageManager::FPartImageManager()
     : bIsInitialized(false)
 {
