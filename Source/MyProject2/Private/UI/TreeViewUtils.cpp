@@ -56,12 +56,6 @@ bool FTreeViewUtils::ReadCSVFile(const FString& FilePath, TArray<TArray<FString>
     return OutRows.Num() > 0;
 }
 
-// 문자열 유틸리티 함수
-FString FTreeViewUtils::GetSafeString(const FString& InStr)
-{
-    return InStr.IsEmpty() ? TEXT("N/A") : InStr;
-}
-
 // 항목이 검색어와 일치하는지 확인하는 함수
 bool FTreeViewUtils::DoesItemMatchSearch(const TSharedPtr<FPartTreeItem>& Item, const FString& InSearchText)
 {
@@ -117,3 +111,44 @@ TSharedPtr<FPartTreeItem> FTreeViewUtils::FindParentItem(const TSharedPtr<FPartT
     const TSharedPtr<FPartTreeItem>* ParentPtr = PartNoToItemMap.Find(ChildItem->NextPart);
     return ParentPtr ? *ParentPtr : nullptr;
 }
+
+FText FTreeViewUtils::GetFormattedMetadata(const TSharedPtr<FPartTreeItem>& Item)
+{
+    if (!Item.IsValid())
+    {
+        return FText::FromString("No item selected");
+    }
+    
+    // 선택된 항목의 메타데이터 구성
+    FString MetadataText = FString::Printf(
+        TEXT("S/N: %s\n")
+        TEXT("Level: %d\n")
+        TEXT("Type: %s\n")
+        TEXT("Part No: %s\n")
+        TEXT("Part Rev: %s\n")
+        TEXT("Part Status: %s\n")
+        TEXT("Latest: %s\n")
+        TEXT("Nomenclature: %s\n")
+        TEXT("Instance ID 총수량(ALL DB): %s\n")
+        TEXT("Qty: %s\n")
+        TEXT("NextPart: %s"),
+        *GetSafeString(Item->SN),
+        Item->Level,
+        *GetSafeString(Item->Type),
+        *GetSafeString(Item->PartNo),
+        *GetSafeString(Item->PartRev),
+        *GetSafeString(Item->PartStatus),
+        *GetSafeString(Item->Latest),
+        *GetSafeString(Item->Nomenclature),
+        *GetSafeString(Item->InstanceIDTotalAllDB),
+        *GetSafeString(Item->Qty),
+        *GetSafeString(Item->NextPart)
+    );
+    
+    return FText::FromString(MetadataText);
+}
+
+FString FTreeViewUtils::GetSafeString(const FString& InStr)
+{
+    return InStr.IsEmpty() ? TEXT("N/A") : InStr;
+}   

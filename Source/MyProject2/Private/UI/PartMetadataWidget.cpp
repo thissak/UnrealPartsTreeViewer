@@ -1,7 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "UI/PartMetadataWidget.h"
-
+#include "UI/TreeViewUtils.h"
 #include "ServiceLocator.h"
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체를 위해 필요
 #include "UI/PartImageManager.h"
@@ -121,7 +121,8 @@ TSharedRef<SWidget> SPartMetadataWidget::GetMetadataWidget()
 {
     // 메타데이터 표시를 위한 텍스트 블록 생성
     return SNew(STextBlock)
-        .Text(TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SPartMetadataWidget::GetSelectedItemMetadata)));
+        .Text(TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SPartMetadataWidget::GetSelectedItemMetadata)))
+        .AutoWrapText(true);
 }
 
 void SPartMetadataWidget::UpdateImage()
@@ -133,10 +134,10 @@ void SPartMetadataWidget::UpdateImage()
 
     FString PartNoStr = SelectedItem->PartNo;
     
-    // 이미지 로드 시도 (FPartImageManager 사용)
+    // 이미지 로드 시도 - 이미지 매니저에서 텍스처만 가져옴
     UTexture2D* Texture = FServiceLocator::GetImageManager()->LoadPartImage(PartNoStr);
     
-    // 브러시 생성 및 설정
+    // 브러시 생성 및 설정 - UI 관련 처리는 여기서 수행
     CurrentImageBrush = FServiceLocator::GetImageManager()->CreateImageBrush(Texture);
     
     // 이미지 위젯에 새 브러시 설정
@@ -150,38 +151,8 @@ FText SPartMetadataWidget::GetSelectedItemMetadata() const
         return FText::FromString("No item selected");
     }
     
-    // 선택된 항목의 메타데이터 구성
-    FString MetadataText = FString::Printf(
-        TEXT("S/N: %s\n")
-        TEXT("Level: %d\n")
-        TEXT("Type: %s\n")
-        TEXT("Part No: %s\n")
-        TEXT("Part Rev: %s\n")
-        TEXT("Part Status: %s\n")
-        TEXT("Latest: %s\n")
-        TEXT("Nomenclature: %s\n")
-        TEXT("Instance ID 총수량(ALL DB): %s\n")
-        TEXT("Qty: %s\n")
-        TEXT("NextPart: %s"),
-        *GetSafeString(SelectedItem->SN),
-        SelectedItem->Level,
-        *GetSafeString(SelectedItem->Type),
-        *GetSafeString(SelectedItem->PartNo),
-        *GetSafeString(SelectedItem->PartRev),
-        *GetSafeString(SelectedItem->PartStatus),
-        *GetSafeString(SelectedItem->Latest),
-        *GetSafeString(SelectedItem->Nomenclature),
-        *GetSafeString(SelectedItem->InstanceIDTotalAllDB),
-        *GetSafeString(SelectedItem->Qty),
-        *GetSafeString(SelectedItem->NextPart)
-    );
-    
-    return FText::FromString(MetadataText);
-}
-
-FString SPartMetadataWidget::GetSafeString(const FString& InStr) const
-{
-    return InStr.IsEmpty() ? TEXT("N/A") : InStr;
+    // 유틸 클래스의 함수 사용
+    return FTreeViewUtils::GetFormattedMetadata(SelectedItem);
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION

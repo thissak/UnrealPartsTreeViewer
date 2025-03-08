@@ -3,7 +3,6 @@
 
 #include "UI/PartImageManager.h"
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체 정의를 위해 필요
-#include "Widgets/Images/SImage.h"
 #include "Engine/Texture2D.h"
 #include "ServiceLocator.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -15,6 +14,12 @@ FPartImageManager::FPartImageManager()
 
 FPartImageManager::~FPartImageManager()
 {
+    // 서비스 정리
+    FPartImageManager* ImageManager = FServiceLocator::GetImageManager();
+    if (ImageManager == this)
+    {
+        FServiceLocator::RegisterImageManager(nullptr);
+    }
 }
 
 void FPartImageManager::Initialize()
@@ -80,42 +85,6 @@ void FPartImageManager::CacheImageExistence(const TMap<FString, TSharedPtr<FPart
            PartsWithImageSet.Num(), PartNoToItemMap.Num());
 }
 
-bool FPartImageManager::HasImage(const FString& PartNo) const
-{
-    return PartsWithImageSet.Contains(PartNo);
-}
-
-UTexture2D* FPartImageManager::LoadPartImage(const FString& PartNo)
-{
-    if (!HasImage(PartNo))
-    {
-        return nullptr;
-    }
-    
-    const FString* AssetPathPtr = PartNoToImagePathMap.Find(PartNo);
-    FString AssetPath;
-    
-    if (AssetPathPtr)
-    {
-        AssetPath = *AssetPathPtr;
-    }
-    else
-    {
-        // 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
-        AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNo);
-    }
-    
-    // 에셋 로드 시도
-    UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
-    
-    if (!Texture)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
-    }
-    
-    return Texture;
-}
-
 TSharedPtr<FSlateBrush> FPartImageManager::CreateImageBrush(UTexture2D* Texture)
 {
     FSlateBrush* NewBrush = new FSlateBrush();
@@ -137,6 +106,52 @@ TSharedPtr<FSlateBrush> FPartImageManager::CreateImageBrush(UTexture2D* Texture)
     return MakeShareable(NewBrush);
 }
 
+bool FPartImageManager::HasImage(const FString& PartNo) const
+{
+    return PartsWithImageSet.Contains(PartNo);
+}
+
+UTexture2D* FPartImageManager::LoadPartImage(const FString& PartNo)
+{
+    if (!HasImage(PartNo))
+    {
+        return nullptr;
+    }
+    
+    FString AssetPath = GetImagePathForPart(PartNo);
+    if (AssetPath.IsEmpty())
+    {
+        return nullptr;
+    }
+    
+    // 에셋 로드 시도
+    UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
+    
+    if (!Texture)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
+    }
+    
+    return Texture;
+}
+
+FString FPartImageManager::GetImagePathForPart(const FString& PartNo) const
+{
+    if (!HasImage(PartNo))
+    {
+        return FString();
+    }
+    
+    const FString* AssetPathPtr = PartNoToImagePathMap.Find(PartNo);
+    if (AssetPathPtr)
+    {
+        return *AssetPathPtr;
+    }
+    
+    // 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
+    return FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNo);
+}
+
 // 자식 중에 이미지가 있는 항목이 있는지 확인하는 함수
 bool FPartImageManager::HasChildWithImage(TSharedPtr<FPartTreeItem> Item)
 {
@@ -155,28 +170,4 @@ bool FPartImageManager::HasChildWithImage(TSharedPtr<FPartTreeItem> Item)
     }
     
     return false;
-}
-
-// 이미지 필터링 적용 시 항목 필터링 함수
-bool FPartImageManager::FilterItemsByImage(TSharedPtr<FPartTreeItem> Item)
-{
-    if (!Item.IsValid())
-        return false;
-        
-    // 현재 항목에 이미지가 있는지 확인
-    bool bCurrentItemHasImage = HasImage(Item->PartNo);
-    
-    // 하위 항목도 확인
-    bool bAnyChildHasImage = false;
-    
-    for (auto& ChildItem : Item->Children)
-    {
-        if (FilterItemsByImage(ChildItem))
-        {
-            bAnyChildHasImage = true;
-        }
-    }
-    
-    // 현재 항목이나 하위 항목 중 하나라도 이미지가 있으면 true 반환
-    return bCurrentItemHasImage || bAnyChildHasImage;
 }

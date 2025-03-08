@@ -609,38 +609,7 @@ FText SLevelBasedTreeView::GetSelectedItemMetadata() const
     
     TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
     
-    // 로컬 도우미 함수 정의
-    auto SafeStr = [](const FString& Str) -> FString {
-        return Str.IsEmpty() ? TEXT("N/A") : Str;
-    };
-    
-    // 선택된 항목의 메타데이터 구성
-    FString MetadataText = FString::Printf(
-        TEXT("S/N: %s\n")
-        TEXT("Level: %d\n")
-        TEXT("Type: %s\n")
-        TEXT("Part No: %s\n")
-        TEXT("Part Rev: %s\n")
-        TEXT("Part Status: %s\n")
-        TEXT("Latest: %s\n")
-        TEXT("Nomenclature: %s\n")
-        TEXT("Instance ID 총수량(ALL DB): %s\n")
-        TEXT("Qty: %s\n")
-        TEXT("NextPart: %s"),
-        *SafeStr(SelectedItem->SN),
-        SelectedItem->Level,
-        *SafeStr(SelectedItem->Type),
-        *SafeStr(SelectedItem->PartNo),
-        *SafeStr(SelectedItem->PartRev),
-        *SafeStr(SelectedItem->PartStatus),
-        *SafeStr(SelectedItem->Latest),
-        *SafeStr(SelectedItem->Nomenclature),
-        *SafeStr(SelectedItem->InstanceIDTotalAllDB),
-        *SafeStr(SelectedItem->Qty),
-        *SafeStr(SelectedItem->NextPart)
-    );
-    
-    return FText::FromString(MetadataText);
+    return FTreeViewUtils::GetFormattedMetadata(SelectedItem);
 }
 
 // 트리뷰 구성 함수

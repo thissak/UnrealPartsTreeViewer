@@ -8,21 +8,26 @@
 // 전방 선언
 struct FPartTreeItem;
 class UTexture2D;
-struct FSlateBrush;
 
 /**
  * 파트 이미지 매니저 클래스
- * 파트 이미지 관련 기능을 중앙화한 싱글톤 클래스입니다.
+ * 파트 이미지 데이터 관리에 집중한 클래스입니다.
  */
 class MYPROJECT2_API FPartImageManager
 {
 public:
 	FPartImageManager();
-
 	~FPartImageManager();
 
 	/** 인스턴스 초기화 (모듈 시작 시 호출) */
 	void Initialize();
+	
+	/**
+	 * 이미지 브러시 생성 함수
+	 * @param Texture - 텍스처 (nullptr일 경우 빈 브러시 생성)
+	 * @return 생성된 브러시
+	 */
+	TSharedPtr<FSlateBrush> CreateImageBrush(UTexture2D* Texture);
 
 	/** 이미지 존재 여부 캐싱 함수
 	 * @param PartNoToItemMap - 파트 번호별 항목 맵
@@ -47,11 +52,11 @@ public:
 	 */
 	UTexture2D* LoadPartImage(const FString& PartNo);
 
-	/** 이미지 브러시 생성 함수
-	 * @param Texture - 텍스처 (nullptr일 경우 빈 브러시 생성)
-	 * @return 생성된 브러시
+	/** 파트 번호에 대한 이미지 경로 가져오기
+	 * @param PartNo - 파트 번호
+	 * @return 이미지 경로, 없으면 빈 문자열
 	 */
-	TSharedPtr<FSlateBrush> CreateImageBrush(UTexture2D* Texture = nullptr);
+	FString GetImagePathForPart(const FString& PartNo) const;
 
 	/**
 	 * 자식 중에 이미지가 있는 항목이 있는지 확인하는 함수
@@ -59,13 +64,6 @@ public:
 	 * @return 이미지가 있으면 true, 없으면 false
 	 */
 	bool HasChildWithImage(TSharedPtr<FPartTreeItem> Item);
-    
-	/**
-	 * 이미지 필터링 적용 시 항목 필터링 함수
-	 * @param Item - 필터링할 항목
-	 * @return 필터에 포함되면 true, 아니면 false
-	 */
-	bool FilterItemsByImage(TSharedPtr<FPartTreeItem> Item);
 
 private:
 	/** 이미지가 있는 파트 번호 집합 */

@@ -24,13 +24,6 @@ public:
 	static bool ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows);
     
 	/**
-	 * 안전한 문자열 반환 함수
-	 * @param InStr - 입력 문자열
-	 * @return 비어있으면 "N/A", 아니면 원래 문자열
-	 */
-	static FString GetSafeString(const FString& InStr);
-    
-	/**
 	 * 항목이 검색어와 일치하는지 확인하는 함수
 	 * @param Item - 확인할 항목
 	 * @param InSearchText - 소문자로 변환된 검색어
@@ -52,5 +45,20 @@ public:
 	 * @param PartNoToItemMap - 파트 번호별 항목 맵
 	 * @return 부모 항목
 	 */
-	static TSharedPtr<FPartTreeItem> FindParentItem(const TSharedPtr<FPartTreeItem>& ChildItem, const TMap<FString, TSharedPtr<FPartTreeItem>>& PartNoToItemMap);
+	static TSharedPtr<FPartTreeItem> FindParentItem(const TSharedPtr<FPartTreeItem>& ChildItem,
+		const TMap<FString, TSharedPtr<FPartTreeItem>>& PartNoToItemMap);
+
+	/**
+	 * 항목의 메타데이터를 형식화된 텍스트로 반환하는 함수
+	 * @param Item - 메타데이터를 가져올 항목
+	 * @return 형식화된 메타데이터 텍스트
+	 */
+	static FText GetFormattedMetadata(const TSharedPtr<FPartTreeItem>& Item);
+
+	/**
+	 * 안전한 문자열 반환 함수
+	 * @param InStr - 입력 문자열
+	 * @return 비어있으면 "N/A", 아니면 원래 문자열
+	 */
+	static FString GetSafeString(const FString& InStr);
 };
