@@ -36,8 +36,8 @@ void FMyProject2EditorModule::ShutdownModule()
     FPartImageManager* ImageManager = FServiceLocator::GetImageManager();
     if (ImageManager)
     {
-        delete ImageManager;
         FServiceLocator::RegisterImageManager(nullptr);
+        delete ImageManager;
     }
 }
 
