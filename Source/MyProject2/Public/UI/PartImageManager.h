@@ -19,6 +19,8 @@ class MYPROJECT2_API FPartImageManager
 public:
 	FPartImageManager();
 
+	~FPartImageManager();
+
 	/** 인스턴스 초기화 (모듈 시작 시 호출) */
 	void Initialize();
 

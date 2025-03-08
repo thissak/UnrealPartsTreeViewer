@@ -5,11 +5,23 @@
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체 정의를 위해 필요
 #include "Widgets/Images/SImage.h"
 #include "Engine/Texture2D.h"
+#include "ServiceLocator.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 
 FPartImageManager::FPartImageManager()
     : bIsInitialized(false)
 {
+}
+
+FPartImageManager::~FPartImageManager()
+{
+    // 서비스 정리
+    FPartImageManager* ImageManager = FServiceLocator::GetImageManager();
+    if (ImageManager)
+    {
+        delete ImageManager;
+        FServiceLocator::RegisterImageManager(nullptr);
+    }
 }
 
 void FPartImageManager::Initialize()
