@@ -61,4 +61,26 @@ public:
 	 * @return 비어있으면 "N/A", 아니면 원래 문자열
 	 */
 	static FString GetSafeString(const FString& InStr);
+
+	/**
+	 * 항목 생성 및 레벨별 그룹화 함수
+	 * @param ExcelData - CSV 데이터
+	 * @param PartNoColIdx - 파트 번호 컬럼 인덱스
+	 * @param NextPartColIdx - 상위 파트 번호 컬럼 인덱스
+	 * @param LevelColIdx - 레벨 컬럼 인덱스
+	 * @param OutPartNoToItemMap - [출력] 파트 번호별 항목 맵
+	 * @param OutLevelToItemsMap - [출력] 레벨별 항목 맵
+	 * @param OutMaxLevel - [출력] 최대 레벨 깊이
+	 * @param OutRootItems - [출력] 루트 항목 배열
+	 * @return 생성된 유효 항목 수
+	 */
+	static int32 CreateAndGroupItems(
+		const TArray<TArray<FString>>& ExcelData, 
+		int32 PartNoColIdx, 
+		int32 NextPartColIdx, 
+		int32 LevelColIdx,
+		TMap<FString, TSharedPtr<FPartTreeItem>>& OutPartNoToItemMap,
+		TMap<int32, TArray<TSharedPtr<FPartTreeItem>>>& OutLevelToItemsMap,
+		int32& OutMaxLevel,
+		TArray<TSharedPtr<FPartTreeItem>>& OutRootItems);
 };
