@@ -32,7 +32,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     MetadataWidget = InArgs._MetadataWidget;
     
     // 이미지 브러시 초기화
-	CurrentImageBrush = CreateImageBrush(nullptr);
+	CurrentImageBrush = FTreeViewUtils::CreateImageBrush(nullptr);
     
     // 위젯 구성
     ChildSlot
@@ -314,126 +314,6 @@ void SLevelBasedTreeView::OnTreeItemDoubleClick(TSharedPtr<FPartTreeItem> Item)
     }
 }
 
-// 이미지 존재 여부 캐싱 함수
-void SLevelBasedTreeView::CacheImageExistence()
-{
-    // Set 및 맵 초기화
-    PartsWithImageSet.Empty();
-    PartNoToImagePathMap.Empty();
-    
-    // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
-    const FString ImageDir = TEXT("/Game/00_image");
-    
-    // 에셋 레지스트리 활용
-    TArray<FAssetData> AssetList;
-    FARFilter Filter;
-    
-    // ClassNames 대신 ClassPaths 사용
-    Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
-    Filter.PackagePaths.Add(*ImageDir);
-    
-    // 에셋 레지스트리에서 모든 텍스처 에셋 찾기
-    FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-    AssetRegistryModule.Get().GetAssets(Filter, AssetList);
-    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 시작: 총 %d개 에셋 발견"), AssetList.Num());
-    
-    // 에셋 처리
-    for (const FAssetData& Asset : AssetList)
-    {
-        FString AssetName = Asset.AssetName.ToString();
-    	FString AssetPath = Asset.GetObjectPathString();
-        
-        // 언더바로 문자열 분리
-        TArray<FString> Parts;
-        AssetName.ParseIntoArray(Parts, TEXT("_"));
-        
-        // 언더바로 구분된 부분이 4개 이상인지 확인
-        if (Parts.Num() >= 4)
-        {
-            // 3번째 인덱스가 파트 번호
-            FString PartNo = Parts[3];
-            
-            // PartsWithImageSet에 파트 번호 추가
-            if(PartNoToItemMap.Contains(PartNo))
-            {
-                PartsWithImageSet.Add(PartNo);
-                // 실제 에셋 경로 저장
-                PartNoToImagePathMap.Add(PartNo, AssetPath);
-            }
-        }
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 완료: 이미지 있는 노드 %d개 / 전체 노드 %d개"), 
-           PartsWithImageSet.Num(), PartNoToItemMap.Num());
-    
-    // 메타데이터 위젯에 이미지 관련 정보 전달
-    if (MetadataWidget.IsValid())
-    {
-        MetadataWidget->SetPartsWithImageSet(PartsWithImageSet);
-        MetadataWidget->SetPartImagePathMap(PartNoToImagePathMap);
-    }
-}
-
-// 이미지 존재 여부 확인 헬퍼 함수
-bool SLevelBasedTreeView::HasImage(const FString& PartNo) const
-{
-	return PartsWithImageSet.Contains(PartNo);
-}
-
-// 브러시 생성/설정을 위한 유틸리티 함수
-TSharedPtr<FSlateBrush> SLevelBasedTreeView::CreateImageBrush(UTexture2D* Texture)
-{
-	FSlateBrush* NewBrush = new FSlateBrush();
-	NewBrush->DrawAs = ESlateBrushDrawType::Image;
-	NewBrush->Tiling = ESlateBrushTileType::NoTile;
-	NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
-    
-	if (Texture)
-	{
-		NewBrush->SetResourceObject(Texture);
-		NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
-	}
-	else
-	{
-		NewBrush->DrawAs = ESlateBrushDrawType::NoDrawType;
-		NewBrush->ImageSize = FVector2D(400, 300);
-	}
-    
-	return MakeShareable(NewBrush);
-}
-
-// 이미지 존재 확인 및 로드를 위한 함수
-UTexture2D* SLevelBasedTreeView::LoadPartImage(const FString& PartNo)
-{
-	if (!PartsWithImageSet.Contains(PartNo))
-	{
-		return nullptr;
-	}
-    
-	FString* AssetPathPtr = PartNoToImagePathMap.Find(PartNo);
-	FString AssetPath;
-    
-	if (AssetPathPtr)
-	{
-		AssetPath = *AssetPathPtr;
-	}
-	else
-	{
-		// 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
-		AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNo);
-	}
-    
-	// 에셋 로드 시도
-	UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
-    
-	if (!Texture)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
-	}
-    
-	return Texture;
-}
-
 // 선택된 항목 이미지 업데이트
 void SLevelBasedTreeView::UpdateSelectedItemImage()
 {
@@ -449,10 +329,10 @@ void SLevelBasedTreeView::UpdateSelectedItemImage()
 	FString PartNoStr = SelectedItem->PartNo;
     
 	// 이미지 로드 시도
-	UTexture2D* Texture = LoadPartImage(PartNoStr);
+	UTexture2D* Texture = FTreeViewUtils::LoadPartImage(PartNoStr, PartsWithImageSet, PartNoToImagePathMap);
     
 	// 브러시 생성 및 설정
-	CurrentImageBrush = CreateImageBrush(Texture);
+	CurrentImageBrush = FTreeViewUtils::CreateImageBrush(Texture);
     
 	// 이미지 위젯에 새 브러시 설정
 	ItemImageWidget->SetImage(CurrentImageBrush.Get());
@@ -698,7 +578,7 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     BuildTreeStructure();
     
     // 이미지 존재 여부 캐싱 
-    CacheImageExistence();
+    FTreeViewUtils::CacheImageExistence(PartNoToItemMap, PartsWithImageSet, PartNoToImagePathMap);
     
     // 트리뷰 갱신
     if (TreeView.IsValid())
@@ -857,47 +737,6 @@ void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
     {
         TreeView->RequestTreeRefresh();
     }
-}
-
-// 이미지가 있는 자식 노드 확인 함수
-bool SLevelBasedTreeView::HasChildWithImage(TSharedPtr<FPartTreeItem> Item)
-{
-    if (!Item.IsValid())
-        return false;
-    
-    // 직접 이미지가 있는지 확인
-    if (PartsWithImageSet.Contains(Item->PartNo))
-        return true;
-    
-    // 자식 항목들도 확인
-    for (const auto& Child : Item->Children)
-    {
-        if (HasChildWithImage(Child))
-            return true;
-    }
-    
-    return false;
-}
-
-// 이미지가 있는 항목만 재귀적으로 필터링하는 함수
-bool SLevelBasedTreeView::FilterItemsByImage(TSharedPtr<FPartTreeItem> Item)
-{
-    // 현재 항목에 이미지가 있는지 확인
-    bool bCurrentItemHasImage = PartsWithImageSet.Contains(Item->PartNo);
-    
-    // 하위 항목도 확인
-    bool bAnyChildHasImage = false;
-    
-    for (auto& ChildItem : Item->Children)
-    {
-        if (FilterItemsByImage(ChildItem))
-        {
-            bAnyChildHasImage = true;
-        }
-    }
-    
-    // 현재 항목이나 하위 항목 중 하나라도 이미지가 있으면 true 반환
-    return bCurrentItemHasImage || bAnyChildHasImage;
 }
 
 void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& ExcelData, int32 PartNoColIdx, int32 NextPartColIdx, int32 LevelColIdx)
@@ -1156,7 +995,7 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
         // 이미지 필터링 (기존 코드)
         for (const auto& Child : Item->Children)
         {
-            if (PartsWithImageSet.Contains(Child->PartNo) || HasChildWithImage(Child))
+            if (PartsWithImageSet.Contains(Child->PartNo) || FTreeViewUtils::HasChildWithImage(Child, PartsWithImageSet))
             {
                 OutChildren.Add(Child);
             }

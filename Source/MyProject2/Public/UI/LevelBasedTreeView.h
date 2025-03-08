@@ -235,20 +235,7 @@ private:
 	//===== 검색 관련 함수 =====//
 	void PerformSearch(const FString& InSearchText);
 	void ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item);
-
-    /**
-     * 이미지 유무 캐싱 함수
-     * 모든 파트의 이미지 존재 여부를 미리 확인하고 캐싱합니다.
-     */
-    void CacheImageExistence();
-
-	bool HasImage(const FString& PartNo) const;
 	
-	// 이미지 관련 유틸리티 함수
-	TSharedPtr<FSlateBrush> CreateImageBrush(UTexture2D* Texture = nullptr);
-	UTexture2D* LoadPartImage(const FString& PartNo);
-
-    
     /**
      * 항목 생성 및 레벨별 그룹화 함수
      * @param ExcelData - CSV 데이터
@@ -263,20 +250,6 @@ private:
      * 항목들의 부모-자식 관계를 설정합니다.
      */
     void BuildTreeStructure();
-    
-    /**
-     * 자식 중에 이미지가 있는 항목이 있는지 확인하는 함수
-     * @param Item - 확인할 항목
-     * @return 이미지가 있으면 true, 없으면 false
-     */
-    bool HasChildWithImage(TSharedPtr<FPartTreeItem> Item);
-    
-    /**
-     * 이미지 필터링 적용 시 항목 필터링 함수
-     * @param Item - 필터링할 항목
-     * @return 필터에 포함되면 true, 아니면 false
-     */
-    bool FilterItemsByImage(TSharedPtr<FPartTreeItem> Item);
 
 };
 

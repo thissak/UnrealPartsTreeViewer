@@ -2,9 +2,12 @@
 // 파트 트리뷰를 위한 일반 유틸리티 함수 모음 구현
 
 #include "UI/TreeViewUtils.h"
+#include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체 정의를 위해 필요
 #include "Misc/FileHelper.h"
 #include "HAL/PlatformFilemanager.h"
-#include "UI/LevelBasedTreeView.h"
+#include "Widgets/Images/SImage.h"
+#include "Engine/Texture2D.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 
 // CSV 파일 읽기 함수
 bool FTreeViewUtils::ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows)
@@ -118,86 +121,161 @@ TSharedPtr<FPartTreeItem> FTreeViewUtils::FindParentItem(const TSharedPtr<FPartT
     return ParentPtr ? *ParentPtr : nullptr;
 }
 
-// 필요한 열 인덱스 찾기 함수
-void FTreeViewUtils::FindColumnIndices(
-    const TArray<FString>& HeaderRow,
-    int32& OutPartNoColIdx,
-    int32& OutNextPartColIdx,
-    int32& OutLevelColIdx,
-    int32& OutSNColIdx,
-    int32& OutTypeColIdx,
-    int32& OutPartRevColIdx,
-    int32& OutPartStatusColIdx,
-    int32& OutLatestColIdx,
-    int32& OutNomenclatureColIdx,
-    int32& OutInstanceIDTotalColIdx,
-    int32& OutQtyColIdx)
+// 자식 중에 이미지가 있는 항목이 있는지 확인하는 함수
+bool FTreeViewUtils::HasChildWithImage(TSharedPtr<FPartTreeItem> Item, const TSet<FString>& PartsWithImageSet)
 {
-    // 파트 번호 열 인덱스 찾기
-    OutPartNoColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("PartNo") || HeaderName == TEXT("Part No");
-    });
+    if (!Item.IsValid())
+        return false;
     
-    // 상위 파트 번호 열 인덱스 찾기
-    OutNextPartColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("NextPart");
-    });
+    // 직접 이미지가 있는지 확인
+    if (PartsWithImageSet.Contains(Item->PartNo))
+        return true;
     
-    // 레벨 열 인덱스 찾기
-    OutLevelColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Level");
-    });
+    // 자식 항목들도 확인
+    for (const auto& Child : Item->Children)
+    {
+        if (HasChildWithImage(Child, PartsWithImageSet))
+            return true;
+    }
     
-    // S/N 열 인덱스 찾기
-    OutSNColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("S/N");
-    });
+    return false;
+}
+
+// 이미지 필터링 적용 시 항목 필터링 함수
+bool FTreeViewUtils::FilterItemsByImage(TSharedPtr<FPartTreeItem> Item, const TSet<FString>& PartsWithImageSet)
+{
+    // 현재 항목에 이미지가 있는지 확인
+    bool bCurrentItemHasImage = PartsWithImageSet.Contains(Item->PartNo);
     
-    // 타입 열 인덱스 찾기
-    OutTypeColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Type");
-    });
+    // 하위 항목도 확인
+    bool bAnyChildHasImage = false;
     
-    // 파트 리비전 열 인덱스 찾기
-    OutPartRevColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Part Rev");
-    });
+    for (auto& ChildItem : Item->Children)
+    {
+        if (FilterItemsByImage(ChildItem, PartsWithImageSet))
+        {
+            bAnyChildHasImage = true;
+        }
+    }
     
-    // 파트 상태 열 인덱스 찾기
-    OutPartStatusColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Part Status");
-    });
+    // 현재 항목이나 하위 항목 중 하나라도 이미지가 있으면 true 반환
+    return bCurrentItemHasImage || bAnyChildHasImage;
+}
+
+// 이미지 존재 여부 확인 함수
+bool FTreeViewUtils::HasImage(const FString& PartNo, const TSet<FString>& PartsWithImageSet)
+{
+    return PartsWithImageSet.Contains(PartNo);
+}
+
+// 이미지 브러시 생성 함수
+TSharedPtr<FSlateBrush> FTreeViewUtils::CreateImageBrush(UTexture2D* Texture)
+{
+    FSlateBrush* NewBrush = new FSlateBrush();
+    NewBrush->DrawAs = ESlateBrushDrawType::Image;
+    NewBrush->Tiling = ESlateBrushTileType::NoTile;
+    NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
     
-    // 최신 여부 열 인덱스 찾기
-    OutLatestColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Latest");
-    });
+    if (Texture)
+    {
+        NewBrush->SetResourceObject(Texture);
+        NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+    }
+    else
+    {
+        NewBrush->DrawAs = ESlateBrushDrawType::NoDrawType;
+        NewBrush->ImageSize = FVector2D(400, 300);
+    }
     
-    // 명칭 열 인덱스 찾기
-    OutNomenclatureColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Nomenclature");
-    });
+    return MakeShareable(NewBrush);
+}
+
+// 파트 이미지 로드 함수
+UTexture2D* FTreeViewUtils::LoadPartImage(const FString& PartNo, 
+                                         const TSet<FString>& PartsWithImageSet,
+                                         const TMap<FString, FString>& PartNoToImagePathMap)
+{
+    if (!PartsWithImageSet.Contains(PartNo))
+    {
+        return nullptr;
+    }
     
-    // 인스턴스 ID 총수량 열 인덱스 찾기
-    OutInstanceIDTotalColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Instance ID 총수량(ALL DB)");
-    });
+    const FString* AssetPathPtr = PartNoToImagePathMap.Find(PartNo);
+    FString AssetPath;
     
-    // 수량 열 인덱스 찾기
-    OutQtyColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Qty");
-    });
+    if (AssetPathPtr)
+    {
+        AssetPath = *AssetPathPtr;
+    }
+    else
+    {
+        // 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
+        AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNo);
+    }
     
-    // 인덱스를 찾지 못했을 때 기본값 설정
-    OutPartNoColIdx = (OutPartNoColIdx != INDEX_NONE) ? OutPartNoColIdx : 3;      // D열 (Part No)
-    OutNextPartColIdx = (OutNextPartColIdx != INDEX_NONE) ? OutNextPartColIdx : 13; // N열 (NextPart)
-    OutLevelColIdx = (OutLevelColIdx != INDEX_NONE) ? OutLevelColIdx : 1;         // B열 (Level)
-    OutSNColIdx = (OutSNColIdx != INDEX_NONE) ? OutSNColIdx : 0;                  // A열 (S/N)
-    OutTypeColIdx = (OutTypeColIdx != INDEX_NONE) ? OutTypeColIdx : 2;            // C열 (Type)
-    OutPartRevColIdx = (OutPartRevColIdx != INDEX_NONE) ? OutPartRevColIdx : 4;    // E열 (Part Rev)
-    OutPartStatusColIdx = (OutPartStatusColIdx != INDEX_NONE) ? OutPartStatusColIdx : 5; // F열 (Part Status)
-    OutLatestColIdx = (OutLatestColIdx != INDEX_NONE) ? OutLatestColIdx : 6;      // G열 (Latest)
-    OutNomenclatureColIdx = (OutNomenclatureColIdx != INDEX_NONE) ? OutNomenclatureColIdx : 7; // H열 (Nomenclature)
-    OutInstanceIDTotalColIdx = (OutInstanceIDTotalColIdx != INDEX_NONE) ? OutInstanceIDTotalColIdx : 11; // L열 (Instance ID 총수량)
-    OutQtyColIdx = (OutQtyColIdx != INDEX_NONE) ? OutQtyColIdx : 12;              // M열 (Qty)
+    // 에셋 로드 시도
+    UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
+    
+    if (!Texture)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
+    }
+    
+    return Texture;
+}
+
+// 이미지 존재 여부 캐싱 함수
+void FTreeViewUtils::CacheImageExistence(
+    const TMap<FString, TSharedPtr<FPartTreeItem>>& PartNoToItemMap,
+    TSet<FString>& OutPartsWithImageSet,
+    TMap<FString, FString>& OutPartNoToImagePathMap)
+{
+    // Set 및 맵 초기화
+    OutPartsWithImageSet.Empty();
+    OutPartNoToImagePathMap.Empty();
+    
+    // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
+    const FString ImageDir = TEXT("/Game/00_image");
+    
+    // 에셋 레지스트리 활용
+    TArray<FAssetData> AssetList;
+    FARFilter Filter;
+    
+    // ClassNames 대신 ClassPaths 사용
+    Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
+    Filter.PackagePaths.Add(*ImageDir);
+    
+    // 에셋 레지스트리에서 모든 텍스처 에셋 찾기
+    FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+    AssetRegistryModule.Get().GetAssets(Filter, AssetList);
+    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 시작: 총 %d개 에셋 발견"), AssetList.Num());
+    
+    // 에셋 처리
+    for (const FAssetData& Asset : AssetList)
+    {
+        FString AssetName = Asset.AssetName.ToString();
+        FString AssetPath = Asset.GetObjectPathString();
+        
+        // 언더바로 문자열 분리
+        TArray<FString> Parts;
+        AssetName.ParseIntoArray(Parts, TEXT("_"));
+        
+        // 언더바로 구분된 부분이 4개 이상인지 확인
+        if (Parts.Num() >= 4)
+        {
+            // 3번째 인덱스가 파트 번호
+            FString PartNo = Parts[3];
+            
+            // PartsWithImageSet에 파트 번호 추가
+            if(PartNoToItemMap.Contains(PartNo))
+            {
+                OutPartsWithImageSet.Add(PartNo);
+                // 실제 에셋 경로 저장
+                OutPartNoToImagePathMap.Add(PartNo, AssetPath);
+            }
+        }
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 완료: 이미지 있는 노드 %d개 / 전체 노드 %d개"), 
+           OutPartsWithImageSet.Num(), PartNoToItemMap.Num());
 }
