@@ -522,6 +522,67 @@ void SLevelBasedTreeView::ExpandItemRecursively(TSharedPtr<FPartTreeItem> Item, 
     }
 }
 
+// 이미지 존재 여부 캐싱 함수
+void SLevelBasedTreeView::CacheImageExistence()
+{
+    // Set 및 맵 초기화
+    PartsWithImageSet.Empty();
+    PartNoToImagePathMap.Empty();
+    
+    // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
+    const FString ImageDir = TEXT("/Game/00_image");
+    
+    // 에셋 레지스트리 활용
+    TArray<FAssetData> AssetList;
+    FARFilter Filter;
+    
+    // ClassNames 대신 ClassPaths 사용
+    Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
+    Filter.PackagePaths.Add(*ImageDir);
+    
+    // 에셋 레지스트리에서 모든 텍스처 에셋 찾기
+    FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+    AssetRegistryModule.Get().GetAssets(Filter, AssetList);
+    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 시작: 총 %d개 에셋 발견"), AssetList.Num());
+    
+    // 에셋 처리
+    for (const FAssetData& Asset : AssetList)
+    {
+        FString AssetName = Asset.AssetName.ToString();
+        FString AssetPath = Asset.GetObjectPathString();
+        
+        // 언더바로 문자열 분리
+        TArray<FString> Parts;
+        AssetName.ParseIntoArray(Parts, TEXT("_"));
+        
+        // 언더바로 구분된 부분이 4개 이상인지 확인
+        if (Parts.Num() >= 4)
+        {
+            // 3번째 인덱스가 파트 번호
+            FString PartNo = Parts[3];
+            
+            // PartsWithImageSet에 파트 번호 추가
+            if(PartNoToItemMap.Contains(PartNo))
+            {
+                PartsWithImageSet.Add(PartNo);
+                // 실제 에셋 경로 저장
+                PartNoToImagePathMap.Add(PartNo, AssetPath);
+            }
+        }
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 완료: 이미지 있는 노드 %d개 / 전체 노드 %d개"), 
+           PartsWithImageSet.Num(), PartNoToItemMap.Num());
+    
+    // 메타데이터 위젯에 이미지 관련 정보 전달
+    if (MetadataWidget.IsValid())
+    {
+        MetadataWidget->SetPartsWithImageSet(PartsWithImageSet);
+        MetadataWidget->SetPartImagePathMap(PartNoToImagePathMap);
+    }
+}
+
+
 // 트리뷰 구성 함수
 bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
 {
@@ -571,6 +632,7 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     
     UE_LOG(LogTemp, Display, TEXT("CSV 데이터 읽기 완료: %d개 행"), ExcelData.Num() - 1);
     
+    
     // 1단계: 모든 항목 생성 및 레벨별 그룹화
     CreateAndGroupItems(ExcelData, PartNoColIdx, NextPartColIdx, LevelColIdx);
     
@@ -578,7 +640,7 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     BuildTreeStructure();
     
     // 이미지 존재 여부 캐싱 
-    FTreeViewUtils::CacheImageExistence(PartNoToItemMap, PartsWithImageSet, PartNoToImagePathMap);
+    CacheImageExistence();
     
     // 트리뷰 갱신
     if (TreeView.IsValid())

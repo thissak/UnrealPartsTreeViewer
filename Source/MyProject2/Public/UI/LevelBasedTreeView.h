@@ -251,6 +251,8 @@ private:
      */
     void BuildTreeStructure();
 
+	void CacheImageExistence();
+
 };
 
 /**
