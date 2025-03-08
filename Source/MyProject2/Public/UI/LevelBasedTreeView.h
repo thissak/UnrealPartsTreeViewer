@@ -3,13 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Widgets/SCompoundWidget.h"
-#include "Widgets/Views/STreeView.h"
+#include "Engine/Texture2D.h"
 #include "Misc/FileHelper.h"
 #include "HAL/PlatformFilemanager.h"
+#include "Widgets/SCompoundWidget.h"
+#include "Widgets/Views/STreeView.h"
 #include "Widgets/Images/SImage.h"
-#include "Engine/Texture2D.h"
-#include "AssetRegistry/AssetRegistryModule.h"
 
 // 전방 선언
 class SPartMetadataWidget;
@@ -235,13 +234,8 @@ private:
 
 	//===== 검색 관련 함수 =====//
 	void PerformSearch(const FString& InSearchText);
-	bool DoesItemMatchSearch(const TSharedPtr<FPartTreeItem>& Item, const FString& InSearchText);
 	void ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item);
-	TSharedPtr<FPartTreeItem> FindParentItem(const TSharedPtr<FPartTreeItem>& ChildItem);
-	bool IsChildOf(const TSharedPtr<FPartTreeItem>& PotentialChild, const TSharedPtr<FPartTreeItem>& PotentialParent);
 
-    //===== 유틸리티 함수 =====//
-    
     /**
      * 이미지 유무 캐싱 함수
      * 모든 파트의 이미지 존재 여부를 미리 확인하고 캐싱합니다.
@@ -253,14 +247,7 @@ private:
 	// 이미지 관련 유틸리티 함수
 	TSharedPtr<FSlateBrush> CreateImageBrush(UTexture2D* Texture = nullptr);
 	UTexture2D* LoadPartImage(const FString& PartNo);
-    
-    /**
-     * CSV 파일 읽기 함수
-     * @param FilePath - CSV 파일 경로
-     * @param OutRows - 읽은 CSV 데이터를 저장할 배열
-     * @return 파일 읽기 성공 여부
-     */
-    bool ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows);
+
     
     /**
      * 항목 생성 및 레벨별 그룹화 함수
@@ -290,13 +277,7 @@ private:
      * @return 필터에 포함되면 true, 아니면 false
      */
     bool FilterItemsByImage(TSharedPtr<FPartTreeItem> Item);
-    
-    /**
-     * 안전한 문자열 반환 함수
-     * @param InStr - 입력 문자열
-     * @return 비어있으면 "N/A", 아니면 원래 문자열
-     */
-    FString GetSafeString(const FString& InStr) const;
+
 };
 
 /**

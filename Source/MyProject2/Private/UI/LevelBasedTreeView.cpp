@@ -2,12 +2,13 @@
 
 #include "MyProject2/Public/UI/LevelBasedTreeView.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "UI/PartMetadataWidget.h"
+#include "UI/TreeViewUtils.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SSearchBox.h"
-#include "UI/PartMetadataWidget.h"
 #include "Windows/WindowsPlatformApplicationMisc.h"
 #include "SlateOptMacros.h"
 
@@ -216,7 +217,7 @@ void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
     for (const auto& Pair : PartNoToItemMap)
     {
         TSharedPtr<FPartTreeItem> Item = Pair.Value;
-        if (DoesItemMatchSearch(Item, LowerSearchText))
+        if (FTreeViewUtils::DoesItemMatchSearch(Item, LowerSearchText))
         {
             SearchResults.Add(Item);
         }
@@ -641,56 +642,6 @@ void SLevelBasedTreeView::ExpandItemRecursively(TSharedPtr<FPartTreeItem> Item, 
     }
 }
 
-// CSV 파일 읽기 함수
-bool SLevelBasedTreeView::ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows)
-{
-    // 파일을 줄 단위로 읽기
-    TArray<FString> Lines;
-    if (!FFileHelper::LoadFileToStringArray(Lines, *FilePath))
-    {
-        UE_LOG(LogTemp, Error, TEXT("파일 로드 실패: %s"), *FilePath);
-        return false;
-    }
-    
-    for (const FString& Line : Lines)
-    {
-        if (Line.IsEmpty())
-            continue;
-            
-        TArray<FString> Cells;
-        
-        // CSV 파싱 (쉼표로 구분된 셀)
-        bool bInQuotes = false;
-        FString CurrentCell;
-        
-        for (int32 i = 0; i < Line.Len(); i++)
-        {
-            TCHAR CurrentChar = Line[i];
-            
-            if (CurrentChar == TEXT('"'))
-            {
-                bInQuotes = !bInQuotes;
-            }
-            else if (CurrentChar == TEXT(',') && !bInQuotes)
-            {
-                Cells.Add(CurrentCell);
-                CurrentCell.Empty();
-            }
-            else
-            {
-                CurrentCell.AppendChar(CurrentChar);
-            }
-        }
-        
-        // 마지막 셀 추가
-        Cells.Add(CurrentCell);
-        
-        OutRows.Add(Cells);
-    }
-    
-    return OutRows.Num() > 0;
-}
-
 // 트리뷰 구성 함수
 bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
 {
@@ -705,7 +656,7 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     
     // CSV 파일 읽기
     TArray<TArray<FString>> ExcelData;
-    if (!ReadCSVFile(FilePath, ExcelData))
+    if (!FTreeViewUtils::ReadCSVFile(FilePath, ExcelData))
     {
         UE_LOG(LogTemp, Error, TEXT("CSV 파일 읽기 실패: %s"), *FilePath);
         return false;
@@ -876,12 +827,6 @@ FText SLevelBasedTreeView::GetSelectedItemMetadata() const
     );
     
     return FText::FromString(MetadataText);
-}
-
-// 안전한 문자열 반환 함수
-FString SLevelBasedTreeView::GetSafeString(const FString& InStr) const
-{
-    return InStr.IsEmpty() ? TEXT("N/A") : InStr;
 }
 
 void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESelectInfo::Type SelectInfo)
@@ -1192,7 +1137,7 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
                 bool bHasSearchResultChild = false;
                 for (const auto& Result : SearchResults)
                 {
-                    if (IsChildOf(Result, Child))
+                    if (FTreeViewUtils::IsChildOf(Result, Child))
                     {
                         bHasSearchResultChild = true;
                         break;
@@ -1224,70 +1169,17 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
     }
 }
 
-// 유틸리티 함수 추가: 한 항목이 다른 항목의 자식인지 확인
-bool SLevelBasedTreeView::IsChildOf(const TSharedPtr<FPartTreeItem>& PotentialChild, const TSharedPtr<FPartTreeItem>& PotentialParent)
-{
-	if (!PotentialChild.IsValid() || !PotentialParent.IsValid())
-	{
-		return false;
-	}
-    
-	// 직접적인 자식인지 확인
-	for (const auto& DirectChild : PotentialParent->Children)
-	{
-		if (DirectChild == PotentialChild)
-		{
-			return true;
-		}
-        
-		// 재귀적으로 하위 자식들 확인
-		if (IsChildOf(PotentialChild, DirectChild))
-		{
-			return true;
-		}
-	}
-    
-	return false;
-}
-
-// 항목이 검색어와 일치하는지 확인
-bool SLevelBasedTreeView::DoesItemMatchSearch(const TSharedPtr<FPartTreeItem>& Item, const FString& InSearchText)
-{
-	// 대소문자 구분 없이 검색하기 위해 모든 문자열을 소문자로 변환
-	FString LowerPartNo = Item->PartNo.ToLower();
-	FString LowerType = Item->Type.ToLower();
-	FString LowerNomenclature = Item->Nomenclature.ToLower();
-    
-	// 파트 번호, 유형, 명칭에서 검색
-	return LowerPartNo.Contains(InSearchText) || 
-		   LowerType.Contains(InSearchText) || 
-		   LowerNomenclature.Contains(InSearchText);
-}
-
 // 항목의 경로를 펼치는 함수
 void SLevelBasedTreeView::ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item)
 {
 	// 부모 항목을 찾아 재귀적으로 경로 펼치기
-	TSharedPtr<FPartTreeItem> ParentItem = FindParentItem(Item);
+	TSharedPtr<FPartTreeItem> ParentItem = FTreeViewUtils::FindParentItem(Item, PartNoToItemMap);
 	if (ParentItem.IsValid())
 	{
 		ExpandPathToItem(ParentItem);
 		TreeView->SetItemExpansion(ParentItem, true);
 	}
 }
-
-// 항목의 부모를 찾는 함수
-TSharedPtr<FPartTreeItem> SLevelBasedTreeView::FindParentItem(const TSharedPtr<FPartTreeItem>& ChildItem)
-{
-	if (!ChildItem.IsValid() || ChildItem->NextPart.IsEmpty() || ChildItem->NextPart.Equals(TEXT("nan"), ESearchCase::IgnoreCase))
-	{
-		return nullptr;
-	}
-    
-	// NextPart를 기반으로 부모 항목 찾기
-	return *PartNoToItemMap.Find(ChildItem->NextPart);
-}
-
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 // 트리뷰 위젯 생성 헬퍼 함수 - 모듈화된 버전
