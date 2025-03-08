@@ -4,6 +4,7 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UI/PartMetadataWidget.h"
 #include "UI/TreeViewUtils.h"
+#include "UI/PartImageManager.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
@@ -995,7 +996,7 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
         // 이미지 필터링 (FTreeViewUtils 사용)
         for (const auto& Child : Item->Children)
         {
-            if (FPartImageManager::Get().HasImage(Child->PartNo) || FTreeViewUtils::HasChildWithImage(Child))
+            if (FPartImageManager::Get().HasImage(Child->PartNo) || FPartImageManager::Get().HasChildWithImage(Child))
             {
                 OutChildren.Add(Child);
             }

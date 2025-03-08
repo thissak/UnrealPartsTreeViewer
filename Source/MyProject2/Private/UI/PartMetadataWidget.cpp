@@ -2,11 +2,10 @@
 
 #include "UI/PartMetadataWidget.h"
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체를 위해 필요
-#include "UI/TreeViewUtils.h" // FPartImageManager를 위해 필요
+#include "UI/PartImageManager.h"
 #include "SlateOptMacros.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Text/STextBlock.h"
-#include "AssetRegistry/AssetRegistryModule.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
