@@ -14,12 +14,6 @@ FPartImageManager::FPartImageManager()
 
 FPartImageManager::~FPartImageManager()
 {
-    // 서비스 정리
-    FPartImageManager* ImageManager = FServiceLocator::GetImageManager();
-    if (ImageManager == this)
-    {
-        FServiceLocator::RegisterImageManager(nullptr);
-    }
 }
 
 void FPartImageManager::Initialize()
