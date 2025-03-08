@@ -32,7 +32,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     MetadataWidget = InArgs._MetadataWidget;
     
     // 이미지 브러시 초기화
-	CurrentImageBrush = FTreeViewUtils::CreateImageBrush(nullptr);
+	CurrentImageBrush = FPartImageManager::Get().CreateImageBrush(nullptr);
     
     // 위젯 구성
     ChildSlot
@@ -304,6 +304,14 @@ void SLevelBasedTreeView::OnSearchTextCommitted(const FText& InText, ETextCommit
 	}
 }
 
+void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESelectInfo::Type SelectInfo)
+{
+    // 선택 변경 시 메타데이터 위젯에 선택 항목 전달
+    if (Item.IsValid() && MetadataWidget.IsValid())
+    {
+        MetadataWidget->SetSelectedItem(Item);
+    }
+}
 
 void SLevelBasedTreeView::OnTreeItemDoubleClick(TSharedPtr<FPartTreeItem> Item)
 {
@@ -328,11 +336,11 @@ void SLevelBasedTreeView::UpdateSelectedItemImage()
 	TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
 	FString PartNoStr = SelectedItem->PartNo;
     
-	// 이미지 로드 시도
-	UTexture2D* Texture = FTreeViewUtils::LoadPartImage(PartNoStr, PartsWithImageSet, PartNoToImagePathMap);
+	// 이미지 로드 시도 (이제 FPartImageManager 사용)
+	UTexture2D* Texture = FPartImageManager::Get().LoadPartImage(PartNoStr);
     
 	// 브러시 생성 및 설정
-	CurrentImageBrush = FTreeViewUtils::CreateImageBrush(Texture);
+	CurrentImageBrush = FPartImageManager::Get().CreateImageBrush(Texture);
     
 	// 이미지 위젯에 새 브러시 설정
 	ItemImageWidget->SetImage(CurrentImageBrush.Get());
@@ -360,7 +368,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                 }),
                 FCanExecuteAction::CreateLambda([this]() { 
                     // 이미 필터링 중이면 비활성화
-                    return !bFilteringImageNodes && PartsWithImageSet.Num() > 0; 
+                    return !bFilteringImageNodes && FPartImageManager::Get().GetPartsWithImageSet().Num() > 0; 
                 }),
                 FIsActionChecked::CreateLambda([this]() {
                     return bFilteringImageNodes;
@@ -445,7 +453,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
         );
         
         // 이미지 보기 (이미지가 있는 항목인 경우에만 활성화)
-        bool bHasImage = SelectedItem.IsValid() && PartsWithImageSet.Contains(SelectedItem->PartNo);
+        bool bHasImage = SelectedItem.IsValid() && FPartImageManager::Get().HasImage(SelectedItem->PartNo);
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("이미지 보기")),
             FText::FromString(TEXT("선택한 항목의 이미지를 봅니다")),
@@ -522,174 +530,6 @@ void SLevelBasedTreeView::ExpandItemRecursively(TSharedPtr<FPartTreeItem> Item, 
     }
 }
 
-// 이미지 존재 여부 캐싱 함수
-void SLevelBasedTreeView::CacheImageExistence()
-{
-    // Set 및 맵 초기화
-    PartsWithImageSet.Empty();
-    PartNoToImagePathMap.Empty();
-    
-    // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
-    const FString ImageDir = TEXT("/Game/00_image");
-    
-    // 에셋 레지스트리 활용
-    TArray<FAssetData> AssetList;
-    FARFilter Filter;
-    
-    // ClassNames 대신 ClassPaths 사용
-    Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
-    Filter.PackagePaths.Add(*ImageDir);
-    
-    // 에셋 레지스트리에서 모든 텍스처 에셋 찾기
-    FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-    AssetRegistryModule.Get().GetAssets(Filter, AssetList);
-    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 시작: 총 %d개 에셋 발견"), AssetList.Num());
-    
-    // 에셋 처리
-    for (const FAssetData& Asset : AssetList)
-    {
-        FString AssetName = Asset.AssetName.ToString();
-        FString AssetPath = Asset.GetObjectPathString();
-        
-        // 언더바로 문자열 분리
-        TArray<FString> Parts;
-        AssetName.ParseIntoArray(Parts, TEXT("_"));
-        
-        // 언더바로 구분된 부분이 4개 이상인지 확인
-        if (Parts.Num() >= 4)
-        {
-            // 3번째 인덱스가 파트 번호
-            FString PartNo = Parts[3];
-            
-            // PartsWithImageSet에 파트 번호 추가
-            if(PartNoToItemMap.Contains(PartNo))
-            {
-                PartsWithImageSet.Add(PartNo);
-                // 실제 에셋 경로 저장
-                PartNoToImagePathMap.Add(PartNo, AssetPath);
-            }
-        }
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 완료: 이미지 있는 노드 %d개 / 전체 노드 %d개"), 
-           PartsWithImageSet.Num(), PartNoToItemMap.Num());
-    
-    // 메타데이터 위젯에 이미지 관련 정보 전달
-    if (MetadataWidget.IsValid())
-    {
-        MetadataWidget->SetPartsWithImageSet(PartsWithImageSet);
-        MetadataWidget->SetPartImagePathMap(PartNoToImagePathMap);
-    }
-}
-
-
-// 트리뷰 구성 함수
-bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
-{
-    // 데이터 초기화
-    AllRootItems.Empty();
-    PartNoToItemMap.Empty();
-    LevelToItemsMap.Empty();
-    PartsWithImageSet.Empty();
-    MaxLevel = 0;
-    
-    UE_LOG(LogTemp, Display, TEXT("트리뷰 구성 시작: %s"), *FilePath);
-    
-    // CSV 파일 읽기
-    TArray<TArray<FString>> ExcelData;
-    if (!FTreeViewUtils::ReadCSVFile(FilePath, ExcelData))
-    {
-        UE_LOG(LogTemp, Error, TEXT("CSV 파일 읽기 실패: %s"), *FilePath);
-        return false;
-    }
-    
-    if (ExcelData.Num() < 2) // 헤더 + 최소 1개 이상의 데이터 행 필요
-    {
-        UE_LOG(LogTemp, Error, TEXT("데이터 행이 부족합니다"));
-        return false;
-    }
-    
-    // 헤더 행
-    const TArray<FString>& HeaderRow = ExcelData[0];
-    
-    // 필요한 열 인덱스 찾기
-    int32 PartNoColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("PartNo") || HeaderName == TEXT("Part No");
-    });
-    
-    int32 NextPartColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("NextPart");
-    });
-    
-    int32 LevelColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
-        return HeaderName == TEXT("Level");
-    });
-    
-    // 인덱스를 찾지 못했으면 기본값 사용 (실제 엑셀 파일 구조 기준)
-    PartNoColIdx = (PartNoColIdx != INDEX_NONE) ? PartNoColIdx : 3; // D열 (Part No)
-    NextPartColIdx = (NextPartColIdx != INDEX_NONE) ? NextPartColIdx : 13; // N열 (NextPart)
-    LevelColIdx = (LevelColIdx != INDEX_NONE) ? LevelColIdx : 1; // B열 (Level)
-    
-    UE_LOG(LogTemp, Display, TEXT("CSV 데이터 읽기 완료: %d개 행"), ExcelData.Num() - 1);
-    
-    
-    // 1단계: 모든 항목 생성 및 레벨별 그룹화
-    CreateAndGroupItems(ExcelData, PartNoColIdx, NextPartColIdx, LevelColIdx);
-    
-    // 2단계: 트리 구조 구축
-    BuildTreeStructure();
-    
-    // 이미지 존재 여부 캐싱 
-    CacheImageExistence();
-    
-    // 트리뷰 갱신
-    if (TreeView.IsValid())
-    {
-        TreeView->RequestTreeRefresh();
-        
-        // 루트 항목 확장
-        for (auto& RootItem : AllRootItems)
-        {
-            TreeView->SetItemExpansion(RootItem, true);
-        }
-    }
-
-    // 트리뷰 구성 요약 로그 출력
-    int32 TotalNodeCount = 0;
-    for (const auto& LevelPair : LevelToItemsMap)
-    {
-        TotalNodeCount += LevelPair.Value.Num();
-    }
-    
-    UE_LOG(LogTemp, Display, TEXT("트리뷰 구성 요약:"));
-    UE_LOG(LogTemp, Display, TEXT("- 총 노드 수: %d개"), TotalNodeCount);
-    UE_LOG(LogTemp, Display, TEXT("- 루트 노드 수: %d개"), AllRootItems.Num());
-    UE_LOG(LogTemp, Display, TEXT("- 최대 레벨 깊이: %d"), MaxLevel);
-    UE_LOG(LogTemp, Display, TEXT("- 이미지 있는 노드 수: %d개 (%.1f%%)"), 
-           PartsWithImageSet.Num(), 
-           (TotalNodeCount > 0) ? (float)PartsWithImageSet.Num() / TotalNodeCount * 100.0f : 0.0f);
-    
-    // 각 레벨별 노드 갯수 출력
-    for (int32 Level = 0; Level <= MaxLevel; ++Level)
-    {
-        const TArray<TSharedPtr<FPartTreeItem>>* LevelItems = LevelToItemsMap.Find(Level);
-        int32 LevelNodeCount = LevelItems ? LevelItems->Num() : 0;
-        UE_LOG(LogTemp, Display, TEXT("- 레벨 %d 노드 수: %d개"), Level, LevelNodeCount);
-    }
-    
-    return AllRootItems.Num() > 0;
-}
-
-// 메타데이터 위젯 반환 함수
-TSharedRef<SWidget> SLevelBasedTreeView::GetMetadataWidget()
-{
-    // 메타데이터 표시를 위한 텍스트 블록 생성
-    TSharedRef<STextBlock> MetadataText = SNew(STextBlock)
-        .Text(TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SLevelBasedTreeView::GetSelectedItemMetadata)));
-    
-    return MetadataText;
-}
-
 // 이미지 위젯 반환 함수
 TSharedRef<SWidget> SLevelBasedTreeView::GetImageWidget()
 {
@@ -722,6 +562,37 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetImageWidget()
                 ImageBorder
             ]
         ];
+}
+
+// ToggleImageFiltering 함수 구현
+void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
+{
+    // 이미 같은 상태면 아무것도 하지 않음
+    if (bFilteringImageNodes == bEnable)
+    {
+        return;
+    }
+        
+    bFilteringImageNodes = bEnable;
+    
+    UE_LOG(LogTemp, Display, TEXT("이미지 필터링 %s: 이미지 있는 파트 %d개"), 
+        bEnable ? TEXT("활성화") : TEXT("비활성화"), FPartImageManager::Get().GetPartsWithImageSet().Num());
+    
+    // OnGetChildren 함수에서 필터링하도록 트리뷰 갱신만 요청
+    if (TreeView.IsValid())
+    {
+        TreeView->RequestTreeRefresh();
+    }
+}
+
+// 메타데이터 위젯 반환 함수
+TSharedRef<SWidget> SLevelBasedTreeView::GetMetadataWidget()
+{
+    // 메타데이터 표시를 위한 텍스트 블록 생성
+    TSharedRef<STextBlock> MetadataText = SNew(STextBlock)
+        .Text(TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SLevelBasedTreeView::GetSelectedItemMetadata)));
+    
+    return MetadataText;
 }
 
 // 선택된 항목의 메타데이터를 텍스트로 반환하는 메서드 (계속)
@@ -771,34 +642,100 @@ FText SLevelBasedTreeView::GetSelectedItemMetadata() const
     return FText::FromString(MetadataText);
 }
 
-void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESelectInfo::Type SelectInfo)
+// 트리뷰 구성 함수
+bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
 {
-    // 선택 변경 시 메타데이터 위젯에 선택 항목 전달
-    if (Item.IsValid() && MetadataWidget.IsValid())
-    {
-        MetadataWidget->SetSelectedItem(Item);
-    }
-}
-
-// ToggleImageFiltering 함수 구현
-void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
-{
-    // 이미 같은 상태면 아무것도 하지 않음
-    if (bFilteringImageNodes == bEnable)
-    {
-        return;
-    }
-        
-    bFilteringImageNodes = bEnable;
+    // 데이터 초기화
+    AllRootItems.Empty();
+    PartNoToItemMap.Empty();
+    LevelToItemsMap.Empty();
+    MaxLevel = 0;
     
-    UE_LOG(LogTemp, Display, TEXT("이미지 필터링 %s: 이미지 있는 파트 %d개"), 
-        bEnable ? TEXT("활성화") : TEXT("비활성화"), PartsWithImageSet.Num());
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 구성 시작: %s"), *FilePath);
     
-    // OnGetChildren 함수에서 필터링하도록 트리뷰 갱신만 요청
+    // CSV 파일 읽기
+    TArray<TArray<FString>> ExcelData;
+    if (!FTreeViewUtils::ReadCSVFile(FilePath, ExcelData))
+    {
+        UE_LOG(LogTemp, Error, TEXT("CSV 파일 읽기 실패: %s"), *FilePath);
+        return false;
+    }
+    
+    if (ExcelData.Num() < 2) // 헤더 + 최소 1개 이상의 데이터 행 필요
+    {
+        UE_LOG(LogTemp, Error, TEXT("데이터 행이 부족합니다"));
+        return false;
+    }
+    
+    // 헤더 행
+    const TArray<FString>& HeaderRow = ExcelData[0];
+    
+    // 필요한 열 인덱스 찾기
+    int32 PartNoColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("PartNo") || HeaderName == TEXT("Part No");
+    });
+    
+    int32 NextPartColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("NextPart");
+    });
+    
+    int32 LevelColIdx = HeaderRow.IndexOfByPredicate([](const FString& HeaderName) {
+        return HeaderName == TEXT("Level");
+    });
+    
+// 인덱스를 찾지 못했으면 기본값 사용 (실제 엑셀 파일 구조 기준)
+    PartNoColIdx = (PartNoColIdx != INDEX_NONE) ? PartNoColIdx : 3; // D열 (Part No)
+    NextPartColIdx = (NextPartColIdx != INDEX_NONE) ? NextPartColIdx : 13; // N열 (NextPart)
+    LevelColIdx = (LevelColIdx != INDEX_NONE) ? LevelColIdx : 1; // B열 (Level)
+    
+    UE_LOG(LogTemp, Display, TEXT("CSV 데이터 읽기 완료: %d개 행"), ExcelData.Num() - 1);
+    
+    
+    // 1단계: 모든 항목 생성 및 레벨별 그룹화
+    CreateAndGroupItems(ExcelData, PartNoColIdx, NextPartColIdx, LevelColIdx);
+    
+    // 2단계: 트리 구조 구축
+    BuildTreeStructure();
+    
+    // 이미지 존재 여부 캐싱 (FPartImageManager 사용)
+    FPartImageManager::Get().CacheImageExistence(PartNoToItemMap);
+    
+    // 트리뷰 갱신
     if (TreeView.IsValid())
     {
         TreeView->RequestTreeRefresh();
+        
+        // 루트 항목 확장
+        for (auto& RootItem : AllRootItems)
+        {
+            TreeView->SetItemExpansion(RootItem, true);
+        }
     }
+
+    // 트리뷰 구성 요약 로그 출력
+    int32 TotalNodeCount = 0;
+    for (const auto& LevelPair : LevelToItemsMap)
+    {
+        TotalNodeCount += LevelPair.Value.Num();
+    }
+    
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 구성 요약:"));
+    UE_LOG(LogTemp, Display, TEXT("- 총 노드 수: %d개"), TotalNodeCount);
+    UE_LOG(LogTemp, Display, TEXT("- 루트 노드 수: %d개"), AllRootItems.Num());
+    UE_LOG(LogTemp, Display, TEXT("- 최대 레벨 깊이: %d"), MaxLevel);
+    UE_LOG(LogTemp, Display, TEXT("- 이미지 있는 노드 수: %d개 (%.1f%%)"), 
+           FPartImageManager::Get().GetPartsWithImageSet().Num(), 
+           (TotalNodeCount > 0) ? (float)FPartImageManager::Get().GetPartsWithImageSet().Num() / TotalNodeCount * 100.0f : 0.0f);
+    
+    // 각 레벨별 노드 갯수 출력
+    for (int32 Level = 0; Level <= MaxLevel; ++Level)
+    {
+        const TArray<TSharedPtr<FPartTreeItem>>* LevelItems = LevelToItemsMap.Find(Level);
+        int32 LevelNodeCount = LevelItems ? LevelItems->Num() : 0;
+        UE_LOG(LogTemp, Display, TEXT("- 레벨 %d 노드 수: %d개"), Level, LevelNodeCount);
+    }
+    
+    return AllRootItems.Num() > 0;
 }
 
 void SLevelBasedTreeView::CreateAndGroupItems(const TArray<TArray<FString>>& ExcelData, int32 PartNoColIdx, int32 NextPartColIdx, int32 LevelColIdx)
@@ -968,6 +905,7 @@ void SLevelBasedTreeView::BuildTreeStructure()
     UE_LOG(LogTemp, Display, TEXT("트리 구조 구축 완료: 루트 항목 %d개"), AllRootItems.Num());
 }
 
+// OnGenerateRow 함수 구현
 TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeItem> Item, const TSharedRef<STableViewBase>& OwnerTable)
 {
     // 기본 텍스트 색상과 폰트
@@ -995,7 +933,7 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
     else if (!bIsSearching)
     {
         // 검색 중이 아닌 경우 이미지 있는 항목은 빨간색
-        if (PartsWithImageSet.Contains(Item->PartNo))
+        if (FPartImageManager::Get().HasImage(Item->PartNo))
         {
             TextColor = FSlateColor(FLinearColor::Red);
         }
@@ -1018,7 +956,7 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
         ];
 }
 
-// OnGetChildren 함수 수정
+// OnGetChildren 함수 구현
 void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<TSharedPtr<FPartTreeItem>>& OutChildren)
 {
     if (bIsSearching && !SearchText.IsEmpty())
@@ -1054,10 +992,10 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
     }
     else if (bFilteringImageNodes)
     {
-        // 이미지 필터링 (기존 코드)
+        // 이미지 필터링 (FTreeViewUtils 사용)
         for (const auto& Child : Item->Children)
         {
-            if (PartsWithImageSet.Contains(Child->PartNo) || FTreeViewUtils::HasChildWithImage(Child, PartsWithImageSet))
+            if (FPartImageManager::Get().HasImage(Child->PartNo) || FTreeViewUtils::HasChildWithImage(Child))
             {
                 OutChildren.Add(Child);
             }
@@ -1065,7 +1003,7 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
     }
     else
     {
-        // 필터링 없이 모든 자식 항목 표시 (기존 코드)
+        // 필터링 없이 모든 자식 항목 표시
         OutChildren = Item->Children;
     }
 }

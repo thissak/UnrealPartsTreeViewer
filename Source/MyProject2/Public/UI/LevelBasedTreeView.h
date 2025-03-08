@@ -180,12 +180,6 @@ private:
     /** 이미지 표시 위젯 */
     TSharedPtr<SImage> ItemImageWidget;
     
-    /** 이미지가 있는 파트 번호 집합 */
-    TSet<FString> PartsWithImageSet;
-    
-    /** 파트 번호별 이미지 경로 맵 */
-    TMap<FString, FString> PartNoToImagePathMap;
-    
     //===== 필터링 관련 변수 =====//
     
     /** 이미지 필터링 상태 */
@@ -250,9 +244,6 @@ private:
      * 항목들의 부모-자식 관계를 설정합니다.
      */
     void BuildTreeStructure();
-
-	void CacheImageExistence();
-
 };
 
 /**

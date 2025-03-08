@@ -2,10 +2,10 @@
 
 #include "UI/PartMetadataWidget.h"
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체를 위해 필요
+#include "UI/TreeViewUtils.h" // FPartImageManager를 위해 필요
 #include "SlateOptMacros.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Text/STextBlock.h"
-#include "UI/PartMetadataWidget.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
@@ -13,7 +13,7 @@ BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 void SPartMetadataWidget::Construct(const FArguments& InArgs)
 {
     // 기본 이미지 브러시 초기화
-    CurrentImageBrush = CreateImageBrush(nullptr);
+    CurrentImageBrush = FPartImageManager::Get().CreateImageBrush(nullptr);
 
     // 위젯 구성
     ChildSlot
@@ -83,16 +83,6 @@ void SPartMetadataWidget::SetSelectedItem(TSharedPtr<FPartTreeItem> InSelectedIt
     UpdateImage();
 }
 
-void SPartMetadataWidget::SetPartImagePathMap(const TMap<FString, FString>& InPartNoToImagePathMap)
-{
-    PartNoToImagePathMap = InPartNoToImagePathMap;
-}
-
-void SPartMetadataWidget::SetPartsWithImageSet(const TSet<FString>& InPartsWithImageSet)
-{
-    PartsWithImageSet = InPartsWithImageSet;
-}
-
 TSharedRef<SWidget> SPartMetadataWidget::GetImageWidget()
 {
     // 이미지 박스 크기 설정
@@ -142,11 +132,11 @@ void SPartMetadataWidget::UpdateImage()
 
     FString PartNoStr = SelectedItem->PartNo;
     
-    // 이미지 로드 시도
-    UTexture2D* Texture = LoadPartImage(PartNoStr);
+    // 이미지 로드 시도 (FPartImageManager 사용)
+    UTexture2D* Texture = FPartImageManager::Get().LoadPartImage(PartNoStr);
     
     // 브러시 생성 및 설정
-    CurrentImageBrush = CreateImageBrush(Texture);
+    CurrentImageBrush = FPartImageManager::Get().CreateImageBrush(Texture);
     
     // 이미지 위젯에 새 브러시 설정
     ItemImageWidget->SetImage(CurrentImageBrush.Get());
@@ -186,63 +176,6 @@ FText SPartMetadataWidget::GetSelectedItemMetadata() const
     );
     
     return FText::FromString(MetadataText);
-}
-
-bool SPartMetadataWidget::HasImage(const FString& PartNo) const
-{
-    return PartsWithImageSet.Contains(PartNo);
-}
-
-UTexture2D* SPartMetadataWidget::LoadPartImage(const FString& PartNo)
-{
-    if (!HasImage(PartNo))
-    {
-        return nullptr;
-    }
-    
-    FString* AssetPathPtr = PartNoToImagePathMap.Find(PartNo);
-    FString AssetPath;
-    
-    if (AssetPathPtr)
-    {
-        AssetPath = *AssetPathPtr;
-    }
-    else
-    {
-        // 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
-        AssetPath = FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNo);
-    }
-    
-    // 에셋 로드 시도
-    UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *AssetPath);
-    
-    if (!Texture)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
-    }
-    
-    return Texture;
-}
-
-TSharedPtr<FSlateBrush> SPartMetadataWidget::CreateImageBrush(UTexture2D* Texture)
-{
-    FSlateBrush* NewBrush = new FSlateBrush();
-    NewBrush->DrawAs = ESlateBrushDrawType::Image;
-    NewBrush->Tiling = ESlateBrushTileType::NoTile;
-    NewBrush->Mirroring = ESlateBrushMirrorType::NoMirror;
-    
-    if (Texture)
-    {
-        NewBrush->SetResourceObject(Texture);
-        NewBrush->ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
-    }
-    else
-    {
-        NewBrush->DrawAs = ESlateBrushDrawType::NoDrawType;
-        NewBrush->ImageSize = FVector2D(400, 300);
-    }
-    
-    return MakeShareable(NewBrush);
 }
 
 FString SPartMetadataWidget::GetSafeString(const FString& InStr) const
