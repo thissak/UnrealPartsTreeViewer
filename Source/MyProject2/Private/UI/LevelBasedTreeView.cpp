@@ -1,14 +1,12 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿// LevelBasedTreeView.cpp - FA-50M 파트 계층 구조 표시를 위한 트리 뷰 위젯 구현
 
 #include "UI/LevelBasedTreeView.h"
 
 #include "DatasmithSceneManager.h"
-#include "Engine/StaticMeshActor.h"
 #include "ServiceLocator.h"
 #include "SlateOptMacros.h"
 #include "UI/PartMetadataWidget.h"
 #include "UI/TreeViewUtils.h"
-#include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
@@ -26,6 +24,7 @@ BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 void SLevelBasedTreeView::Construct(const FArguments& InArgs)
 {
+    // 기본 변수 초기화
     MaxLevel = 0;
 	bIsSearching = false;  // 검색 상태 초기화
 	SearchText = "";       // 검색어 초기화
@@ -35,9 +34,6 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
 	
     // 메타데이터 위젯 참조 저장
     MetadataWidget = InArgs._MetadataWidget;
-    
-    // 이미지 브러시 초기화
-	CurrentImageBrush = FServiceLocator::GetImageManager()->CreateImageBrush(nullptr);
     
     // 위젯 구성
     ChildSlot
@@ -166,7 +162,7 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 		];
 }
 
-// OnSearchTextChanged 함수 수정
+// 검색어 변경 이벤트 핸들러
 void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
 {
     // 새 검색어
@@ -208,7 +204,7 @@ void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
     }
 }
 
-// PerformSearch 함수 수정
+// 검색 실행 함수
 void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
 {
     // 검색 결과 초기화
@@ -254,6 +250,7 @@ void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
     TreeView->RequestTreeRefresh();
 }
 
+// 레벨 0 항목들 접기 함수
 void SLevelBasedTreeView::FoldLevelZeroItems()
 {
     if (!TreeView.IsValid())
@@ -309,6 +306,7 @@ void SLevelBasedTreeView::OnSearchTextCommitted(const FText& InText, ETextCommit
 	}
 }
 
+// 항목 선택 변경 이벤트 핸들러
 void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESelectInfo::Type SelectInfo)
 {
     // 선택 변경 시 메타데이터 위젯에 선택 항목 전달
@@ -318,6 +316,7 @@ void SLevelBasedTreeView::OnSelectionChanged(TSharedPtr<FPartTreeItem> Item, ESe
     }
 }
 
+// 트리뷰 항목 더블클릭 이벤트 핸들러
 void SLevelBasedTreeView::OnTreeItemDoubleClick(TSharedPtr<FPartTreeItem> Item)
 {
     if (Item.IsValid())
@@ -327,32 +326,7 @@ void SLevelBasedTreeView::OnTreeItemDoubleClick(TSharedPtr<FPartTreeItem> Item)
     }
 }
 
-// 선택된 항목 이미지 업데이트
-void SLevelBasedTreeView::UpdateSelectedItemImage()
-{
-	// 선택된 항목 가져오기
-	TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
-    
-	if (SelectedItems.Num() == 0 || !ItemImageWidget.IsValid())
-	{
-		return;
-	}
-    
-	TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
-	FString PartNoStr = SelectedItem->PartNo;
-    
-	// 이미지 로드 시도 (이제 FPartImageManager 사용)
-	UTexture2D* Texture = FServiceLocator::GetImageManager()->LoadPartImage(PartNoStr);
-    
-	// 브러시 생성 및 설정
-	CurrentImageBrush = FServiceLocator::GetImageManager()->CreateImageBrush(Texture);
-    
-	// 이미지 위젯에 새 브러시 설정
-	ItemImageWidget->SetImage(CurrentImageBrush.Get());
-}
-
-// 컨텍스트 메뉴 생성
-// 컨텍스트 메뉴 생성
+// 컨텍스트 메뉴 생성 함수
 TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
 {
     FMenuBuilder MenuBuilder(true, nullptr);
@@ -457,8 +431,6 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
             )
         );
         
-        // 이미지 보기 메뉴는 제거
-        
         // 선택 노드 펼치기 메뉴
         MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("Expand All Children")),
@@ -536,41 +508,7 @@ void SLevelBasedTreeView::ExpandItemRecursively(TSharedPtr<FPartTreeItem> Item, 
     }
 }
 
-// 이미지 위젯 반환 함수
-TSharedRef<SWidget> SLevelBasedTreeView::GetImageWidget()
-{
-    // 이미지 박스 크기 설정
-    const float ImageWidth = 300.0f;
-    const float ImageHeight = 200.0f;
-
-    // 이미지 위젯 생성
-    TSharedRef<SBorder> ImageBorder = SNew(SBorder)
-        .BorderImage(FCoreStyle::Get().GetBrush("NoBorder"))
-        .Padding(0)
-        .HAlign(HAlign_Center)
-        .VAlign(VAlign_Center)
-        [
-            SAssignNew(ItemImageWidget, SImage)
-            .DesiredSizeOverride(FVector2D(ImageWidth, ImageHeight))
-            .Image(CurrentImageBrush.Get())
-        ];
-
-    return SNew(SBox)
-        .WidthOverride(ImageWidth)
-        .HeightOverride(ImageHeight)
-        .HAlign(HAlign_Center)
-        .VAlign(VAlign_Center)
-        [
-            SNew(SScaleBox)
-            .Stretch(EStretch::ScaleToFit)
-            .StretchDirection(EStretchDirection::Both)
-            [
-                ImageBorder
-            ]
-        ];
-}
-
-// ToggleImageFiltering 함수 구현
+// 이미지 필터링 활성화/비활성화 함수
 void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
 {
     // 이미 같은 상태면 아무것도 하지 않음
@@ -598,7 +536,7 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetMetadataWidget()
     return MetadataText;
 }
 
-// 선택된 항목의 메타데이터를 텍스트로 반환하는 메서드 (계속)
+// 선택된 항목의 메타데이터를 텍스트로 반환하는 메서드
 FText SLevelBasedTreeView::GetSelectedItemMetadata() const
 {
     // 선택된 항목 가져오기
@@ -655,7 +593,7 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
         return HeaderName == TEXT("Level");
     });
     
-// 인덱스를 찾지 못했으면 기본값 사용 (실제 엑셀 파일 구조 기준)
+    // 인덱스를 찾지 못했으면 기본값 사용 (실제 엑셀 파일 구조 기준)
     PartNoColIdx = (PartNoColIdx != INDEX_NONE) ? PartNoColIdx : 3; // D열 (Part No)
     NextPartColIdx = (NextPartColIdx != INDEX_NONE) ? NextPartColIdx : 13; // N열 (NextPart)
     LevelColIdx = (LevelColIdx != INDEX_NONE) ? LevelColIdx : 1; // B열 (Level)
@@ -719,6 +657,7 @@ bool SLevelBasedTreeView::BuildTreeView(const FString& FilePath)
     return AllRootItems.Num() > 0;
 }
 
+// 트리 구조 구축 함수
 void SLevelBasedTreeView::BuildTreeStructure()
 {
     UE_LOG(LogTemp, Display, TEXT("트리 구조 구축 시작: 최대 레벨 %d"), MaxLevel);
@@ -774,7 +713,7 @@ void SLevelBasedTreeView::BuildTreeStructure()
     UE_LOG(LogTemp, Display, TEXT("트리 구조 구축 완료: 루트 항목 %d개"), AllRootItems.Num());
 }
 
-// OnGenerateRow 함수 구현
+// 트리뷰 행 생성 델리게이트
 TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeItem> Item, const TSharedRef<STableViewBase>& OwnerTable)
 {
     // 기본 텍스트 색상과 폰트
@@ -825,7 +764,7 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
         ];
 }
 
-// OnGetChildren 함수 구현
+// 트리뷰 자식 항목 반환 델리게이트
 void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<TSharedPtr<FPartTreeItem>>& OutChildren)
 {
 	if (bIsSearching && !SearchText.IsEmpty())
@@ -889,41 +828,8 @@ void SLevelBasedTreeView::ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item
 		TreeView->SetItemExpansion(ParentItem, true);
 	}
 }
-END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
-// 트리뷰 위젯 생성 헬퍼 함수 - 모듈화된 버전
-void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr<SWidget>& OutMetadataWidget, const FString& ExcelFilePath)
-{
-    UE_LOG(LogTemp, Display, TEXT("트리뷰 위젯 생성 시작: %s"), *ExcelFilePath);
-    
-    // 메타데이터 위젯 생성
-    TSharedPtr<SPartMetadataWidget> MetadataWidget = SNew(SPartMetadataWidget);
-    
-    // SLevelBasedTreeView 인스턴스 생성
-    TSharedPtr<SLevelBasedTreeView> TreeView = SNew(SLevelBasedTreeView)
-        .ExcelFilePath(ExcelFilePath)
-        .MetadataWidget(MetadataWidget);
-    
-    OutTreeViewWidget = SNew(SVerticalBox)
-        // 검색 위젯 추가
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        [
-            TreeView->GetSearchWidget()
-        ]
-        // 트리뷰 위젯
-        + SVerticalBox::Slot()
-        .FillHeight(1.0f)
-        [
-            TreeView.ToSharedRef()
-        ];
-    
-    // 메타데이터 위젯 설정
-    OutMetadataWidget = MetadataWidget.ToSharedRef();
-    
-    UE_LOG(LogTemp, Display, TEXT("트리뷰 위젯 생성 완료"));
-}
-
+// 3DXML 파일 임포트 함수
 void SLevelBasedTreeView::ImportXMLToSelectedNode()
 {
     // 선택된 노드 확인
@@ -983,103 +889,37 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
 #endif
 }
 
-// StaticMesh 액터만 유지하고 나머지 자식 액터 제거하는 함수
-void SLevelBasedTreeView::CleanupNonStaticMeshActors(AActor* RootActor)
-{
-    if (!RootActor)
-        return;
-        
-    // 모든 StaticMesh 액터 찾기
-    TArray<AStaticMeshActor*> StaticMeshActors;
-    FindAllStaticMeshActors(RootActor, StaticMeshActors);
-    
-    UE_LOG(LogTemp, Display, TEXT("StaticMesh 액터 발견: %d개"), StaticMeshActors.Num());
-    
-    // 모든 StaticMesh 액터를 루트 액터에 직접 연결
-    for (AStaticMeshActor* MeshActor : StaticMeshActors)
-    {
-        // 이미 직접 자식이면 건너뛰기
-        AActor* CurrentParent = MeshActor->GetAttachParentActor();
-        if (CurrentParent == RootActor)
-            continue;
-            
-        // 월드 변환 저장
-        FTransform OriginalTransform = MeshActor->GetActorTransform();
-        
-        // 현재 부모에서 분리
-        MeshActor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-        
-        // 루트 액터에 직접 연결
-        MeshActor->AttachToActor(RootActor, FAttachmentTransformRules::KeepWorldTransform);
-        
-        UE_LOG(LogTemp, Verbose, TEXT("StaticMesh 액터 '%s'를 루트에 직접 연결"), *MeshActor->GetName());
-    }
-    
-    // StaticMesh가 아닌 자식 액터 제거
-    int32 RemovedCount = 0;
-    RemoveNonStaticMeshChildren(RootActor, RemovedCount);
-    
-    UE_LOG(LogTemp, Display, TEXT("StaticMesh가 아닌 액터 제거 완료: %d개 제거됨"), RemovedCount);
-}
+END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
-// 액터의 모든 하위 구조에서 StaticMeshActor를 찾는 함수
-void SLevelBasedTreeView::FindAllStaticMeshActors(AActor* RootActor, TArray<AStaticMeshActor*>& OutStaticMeshActors)
+// 트리뷰 위젯 생성 헬퍼 함수
+void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr<SWidget>& OutMetadataWidget, const FString& ExcelFilePath)
 {
-    if (!RootActor)
-        return;
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 위젯 생성 시작: %s"), *ExcelFilePath);
     
-    // 자식 액터 목록 가져오기
-    TArray<AActor*> ChildActors;
-    RootActor->GetAttachedActors(ChildActors);
+    // 메타데이터 위젯 생성
+    TSharedPtr<SPartMetadataWidget> MetadataWidget = SNew(SPartMetadataWidget);
     
-    // 각 자식 액터에 대해 처리
-    for (AActor* ChildActor : ChildActors)
-    {
-        if (ChildActor)
-        {
-            // StaticMeshActor인 경우 결과 배열에 추가
-            if (ChildActor->IsA(AStaticMeshActor::StaticClass()))
-            {
-                OutStaticMeshActors.Add(Cast<AStaticMeshActor>(ChildActor));
-            }
-            
-            // 하위 액터들을 재귀적으로 검색
-            FindAllStaticMeshActors(ChildActor, OutStaticMeshActors);
-        }
-    }
+    // SLevelBasedTreeView 인스턴스 생성
+    TSharedPtr<SLevelBasedTreeView> TreeView = SNew(SLevelBasedTreeView)
+        .ExcelFilePath(ExcelFilePath)
+        .MetadataWidget(MetadataWidget);
+    
+    OutTreeViewWidget = SNew(SVerticalBox)
+        // 검색 위젯 추가
+        + SVerticalBox::Slot()
+        .AutoHeight()
+        [
+            TreeView->GetSearchWidget()
+        ]
+        // 트리뷰 위젯
+        + SVerticalBox::Slot()
+        .FillHeight(1.0f)
+        [
+            TreeView.ToSharedRef()
+        ];
+    
+    // 메타데이터 위젯 설정
+    OutMetadataWidget = MetadataWidget.ToSharedRef();
+    
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 위젯 생성 완료"));
 }
-
-// StaticMeshActor를 제외한 자식 액터들을 재귀적으로 제거하는 함수
-void SLevelBasedTreeView::RemoveNonStaticMeshChildren(AActor* Actor, int32& OutRemovedCount)
-{
-    if (!Actor)
-        return;
-    
-    // 자식 액터 목록 가져오기
-    TArray<AActor*> ChildActors;
-    Actor->GetAttachedActors(ChildActors);
-    
-    // 각 자식 액터에 대해 처리
-    for (AActor* ChildActor : ChildActors)
-    {
-        if (ChildActor)
-        {
-            // StaticMeshActor인 경우 스킵하고 보존
-            if (ChildActor->IsA(AStaticMeshActor::StaticClass()))
-            {
-                UE_LOG(LogTemp, Verbose, TEXT("StaticMeshActor 유지: %s"), *ChildActor->GetName());
-            }
-            else
-            {
-                // 일반 Actor인 경우, 그 자식들을 먼저 재귀적으로 처리
-                RemoveNonStaticMeshChildren(ChildActor, OutRemovedCount);
-                
-                // 그 다음 현재 Actor 제거
-                UE_LOG(LogTemp, Verbose, TEXT("액터 제거: %s"), *ChildActor->GetName());
-                ChildActor->Destroy();
-                OutRemovedCount++;
-            }
-        }
-    }
-}
-
