@@ -24,7 +24,8 @@ public class MyProject2Editor : ModuleRules
                 "MyProject2",
                 "DatasmithCore",         // 추가
                 "DatasmithContent",      // 추가
-                "AssetTools"             // AssetImportTask를 위해 추가
+                "AssetTools", 
+                "WorkspaceMenuStructure" 
             }
         );
     }

@@ -13,8 +13,7 @@ public:
     void RegisterMenusCallback();
 
     void OnToolButtonClicked();
-
-private:
-    TSharedPtr<class SWindow> TreeViewWindow;
-
+    
+    // 도킹 탭 생성 함수
+    TSharedRef<SDockTab> SpawnPartsTreeTab(const FSpawnTabArgs& SpawnTabArgs);
 };
