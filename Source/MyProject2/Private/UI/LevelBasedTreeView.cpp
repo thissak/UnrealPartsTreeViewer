@@ -959,8 +959,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     FFileMatchResult FileResult = FTreeViewUtils::FindMatchingFileForPartNo(
         XMLDir,                // 디렉토리 경로
         TEXT("*.3dxml"),       // 파일 패턴
-        PartNo,                // 파트 번호
-        3                      // 파트 번호가 있는 인덱스 위치
+        PartNo                 // 파트 번호
     );
     
     // 파일을 찾지 못한 경우 오류 메시지 표시
