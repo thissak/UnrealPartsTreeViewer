@@ -34,7 +34,7 @@ void FPartImageManager::CacheImageExistence(const TMap<FString, TSharedPtr<FPart
     PartNoToImagePathMap.Empty();
     
     // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
-    const FString ImageDir = TEXT("/Game/00_image");
+    const FString ImageDir = TEXT("/Game/Data/00_image");
     
     // 에셋 레지스트리 활용
     TArray<FAssetData> AssetList;

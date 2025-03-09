@@ -1,6 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
-#include "MyProject2/Public/UI/LevelBasedTreeView.h"
+#include "UI/LevelBasedTreeView.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UI/PartMetadataWidget.h"
 #include "UI/TreeViewUtils.h"
