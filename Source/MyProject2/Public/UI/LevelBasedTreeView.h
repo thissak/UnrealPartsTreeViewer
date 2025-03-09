@@ -9,56 +9,12 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Views/STreeView.h"
 #include "Widgets/Images/SImage.h"
+#include "UI/PartTreeViewFilter.h"
+#include "UI/PartTreeItem.h"
 
 // 전방 선언
 class SPartMetadataWidget;
-
-/**
- * 파트 트리 아이템 데이터 구조체
- * 트리뷰에 표시되는 각 항목을 표현합니다.
- */
-struct FPartTreeItem
-{
-    // 기본 필드
-    FString PartNo;               // 파트 번호
-    FString NextPart;             // 상위 파트 번호
-    int32 Level;                  // 파트 레벨 (계층 구조 깊이)
-    FString Type;                 // 파트 유형
-    
-    // 추가 필드
-    FString SN;                   // 시리얼 번호
-    FString PartRev;              // 파트 리비전
-    FString PartStatus;           // 파트 상태
-    FString Latest;               // 최신 여부
-    FString Nomenclature;         // 명칭
-    FString InstanceIDTotalAllDB; // 총 인스턴스 ID 수
-    FString Qty;                  // 수량
-    
-    // 자식 항목 배열
-    TArray<TSharedPtr<FPartTreeItem>> Children;
-    
-    /**
-     * 생성자
-     * @param InPartNo - 파트 번호
-     * @param InNextPart - 상위 파트 번호
-     * @param InLevel - 파트 레벨
-     * @param InType - 파트 유형 (선택적)
-     */
-    FPartTreeItem(const FString& InPartNo, const FString& InNextPart, int32 InLevel, const FString& InType = TEXT(""))
-        : PartNo(InPartNo)
-        , NextPart(InNextPart)
-        , Level(InLevel)
-        , Type(InType)
-        , SN(TEXT(""))
-        , PartRev(TEXT(""))
-        , PartStatus(TEXT(""))
-        , Latest(TEXT(""))
-        , Nomenclature(TEXT(""))
-        , InstanceIDTotalAllDB(TEXT(""))
-        , Qty(TEXT(""))
-    {
-    }
-};
+class FPartTreeViewFilterManager;
 
 /**
  * 레벨 기반 트리뷰 위젯 클래스
@@ -132,6 +88,8 @@ private:
 
     /** 메타데이터 위젯 참조 */
     TSharedPtr<SPartMetadataWidget> MetadataWidget;
+	/** 필터 관리자 참조 */
+	TSharedPtr<FPartTreeViewFilterManager> FilterManager;
     
     //===== 트리뷰 및 데이터 관련 변수 =====//
     
@@ -146,7 +104,6 @@ private:
     TSharedPtr<SImage> ItemImageWidget;        // 이미지 표시 위젯
     
     //===== 필터링 관련 변수 =====//
-    bool bFilteringImageNodes;                 // 이미지 필터링 상태
     TArray<TSharedPtr<FPartTreeItem>> FilteredRootItems; // 필터링된 루트 항목
 
     //===== 이벤트 핸들러 =====//

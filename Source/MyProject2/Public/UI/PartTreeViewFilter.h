@@ -2,7 +2,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/LevelBasedTreeView.h" // FPartTreeItem을 위한 포함
+#include "UI/PartTreeItem.h"
 
 /**
  * 트리뷰 필터 인터페이스
@@ -61,8 +61,8 @@ class FImageFilter : public IPartTreeViewFilter
 public:
     FImageFilter() {}
 
-    virtual FString GetFilterName() const override { return TEXT("이미지 있는 노드"); }
-    virtual FString GetFilterDescription() const override { return TEXT("이미지가 있는 노드만 표시합니다"); }
+	virtual FString GetFilterName() const override { return TEXT("ImageFilter"); }
+	virtual FString GetFilterDescription() const override { return TEXT("Show only nodes with images"); }
 
     virtual bool PassesFilter(const TSharedPtr<FPartTreeItem>& Item) const override;
 };

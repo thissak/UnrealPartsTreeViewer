@@ -8,12 +8,16 @@
 //=================================================================
 bool FImageFilter::PassesFilter(const TSharedPtr<FPartTreeItem>& Item) const
 {
-    if (!bEnabled || !Item.IsValid())
-        return true; // 필터가 비활성화되었거나 항목이 유효하지 않으면 항상 통과
+	if (!bEnabled || !Item.IsValid())
+		return true;
 
-    // 이미지가 있는 경우 또는 자식 중에 이미지가 있는 경우 통과
-    return FServiceLocator::GetImageManager()->HasImage(Item->PartNo) || 
-           FServiceLocator::GetImageManager()->HasChildWithImage(Item);
+	bool bHasImage = FServiceLocator::GetImageManager()->HasImage(Item->PartNo);
+	bool bHasChildWithImage = FServiceLocator::GetImageManager()->HasChildWithImage(Item);
+    
+	UE_LOG(LogTemp, Verbose, TEXT("필터 검사: PartNo=%s, HasImage=%d, HasChildWithImage=%d"), 
+		   *Item->PartNo, bHasImage, bHasChildWithImage);
+    
+	return bHasImage || bHasChildWithImage;
 }
 
 //=================================================================

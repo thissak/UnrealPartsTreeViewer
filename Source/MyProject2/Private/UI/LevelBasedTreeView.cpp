@@ -25,10 +25,12 @@ BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 void SLevelBasedTreeView::Construct(const FArguments& InArgs)
 {
     MaxLevel = 0;
-    bFilteringImageNodes = false;
 	bIsSearching = false;  // 검색 상태 초기화
 	SearchText = "";       // 검색어 초기화
 
+	// 필터 관리자 초기화
+	FilterManager = MakeShared<FPartTreeViewFilterManager>();
+	
     // 메타데이터 위젯 참조 저장
     MetadataWidget = InArgs._MetadataWidget;
     
@@ -185,7 +187,7 @@ void SLevelBasedTreeView::OnSearchTextChanged(const FText& InText)
         bIsSearching = false;
         
         // 모든 필터 해제 및 트리뷰 갱신
-        if (bFilteringImageNodes)
+    	if (FilterManager->IsFilterEnabled("ImageFilter"))
         {
             ToggleImageFiltering(false);
         }
@@ -348,6 +350,7 @@ void SLevelBasedTreeView::UpdateSelectedItemImage()
 }
 
 // 컨텍스트 메뉴 생성
+// 컨텍스트 메뉴 생성
 TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
 {
     FMenuBuilder MenuBuilder(true, nullptr);
@@ -356,23 +359,23 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
     TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
     TSharedPtr<FPartTreeItem> SelectedItem = (SelectedItems.Num() > 0) ? SelectedItems[0] : nullptr;
     
-    MenuBuilder.BeginSection("TreeItemActions", FText::FromString(TEXT("메뉴")));
+    MenuBuilder.BeginSection("TreeItemActions", FText::FromString(TEXT("Menu")));
     {
         // 이미지 필터 활성화
         MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("이미지 있는 노드만 보기")),
-            FText::FromString(TEXT("이미지가 있는 노드만 표시합니다")),
+            FText::FromString(TEXT("Show Only Nodes With Images")),
+            FText::FromString(TEXT("Display only nodes that have images")),
             FSlateIcon(),
             FUIAction(
                 FExecuteAction::CreateLambda([this]() {
                     ToggleImageFiltering(true);
                 }),
                 FCanExecuteAction::CreateLambda([this]() { 
-                    // 이미 필터링 중이면 비활성화
-                    return !bFilteringImageNodes && FServiceLocator::GetImageManager()->GetPartsWithImageSet().Num() > 0; 
+                    return !FilterManager->IsFilterEnabled("ImageFilter") && 
+                           FServiceLocator::GetImageManager()->GetPartsWithImageSet().Num() > 0; 
                 }),
                 FIsActionChecked::CreateLambda([this]() {
-                    return bFilteringImageNodes;
+                    return FilterManager->IsFilterEnabled("ImageFilter");
                 })
             ),
             NAME_None,
@@ -381,24 +384,23 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
         
         // 이미지 필터 해제
         MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("모든 노드 보기")),
-            FText::FromString(TEXT("이미지 필터를 해제하고 모든 노드를 표시합니다")),
+            FText::FromString(TEXT("Show All Nodes")),
+            FText::FromString(TEXT("Disable image filter and show all nodes")),
             FSlateIcon(),
             FUIAction(
                 FExecuteAction::CreateLambda([this]() {
                     ToggleImageFiltering(false);
                 }),
                 FCanExecuteAction::CreateLambda([this]() { 
-                    // 필터링 중일 때만 활성화
-                    return bFilteringImageNodes; 
+                    return FilterManager->IsFilterEnabled("ImageFilter"); 
                 })
             )
         );
         
-        // 노드 이름 클립보드에 복사 (선택된 항목이 있을 때만 활성화)
+        // 노드 이름 클립보드에 복사
         MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("노드 이름 복사")),
-            FText::FromString(TEXT("선택한 항목의 이름을 클립보드에 복사합니다")),
+            FText::FromString(TEXT("Copy Node Name")),
+            FText::FromString(TEXT("Copy selected node name to clipboard")),
             FSlateIcon(),
             FUIAction(
                 FExecuteAction::CreateLambda([this]() {
@@ -420,7 +422,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                         // 클립보드에 모든 선택된 항목의 이름 복사
                         FPlatformApplicationMisc::ClipboardCopy(*CombinedNames);
                     
-                        UE_LOG(LogTemp, Display, TEXT("노드 이름 클립보드에 복사됨: %d개 항목"), Items.Num());
+                        UE_LOG(LogTemp, Display, TEXT("Node names copied to clipboard: %d items"), Items.Num());
                     }
                 }),
                 FCanExecuteAction::CreateLambda([this]() { 
@@ -430,10 +432,10 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
             )
         );
         
-        // 상세 정보 보기 (선택된 항목이 있을 때만 활성화)
+        // 상세 정보 보기
         MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("상세 정보 보기")),
-            FText::FromString(TEXT("선택한 항목의 상세 정보를 봅니다")),
+            FText::FromString(TEXT("View Details")),
+            FText::FromString(TEXT("View detailed information for the selected item")),
             FSlateIcon(),
             FUIAction(
                 FExecuteAction::CreateLambda([this]() {
@@ -442,7 +444,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                     if (Items.Num() > 0)
                     {
                         TSharedPtr<FPartTreeItem> Item = Items[0];
-                        UE_LOG(LogTemp, Display, TEXT("항목 상세 정보 - PartNo: %s, Level: %d"), 
+                        UE_LOG(LogTemp, Display, TEXT("Item Details - PartNo: %s, Level: %d"), 
                             *Item->PartNo, Item->Level);
                     }
                 }),
@@ -453,28 +455,12 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
             )
         );
         
-        // 이미지 보기 (이미지가 있는 항목인 경우에만 활성화)
-        bool bHasImage = SelectedItem.IsValid() && FServiceLocator::GetImageManager()->HasImage(SelectedItem->PartNo);
-        MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("이미지 보기")),
-            FText::FromString(TEXT("선택한 항목의 이미지를 봅니다")),
-            FSlateIcon(),
-            FUIAction(
-                FExecuteAction::CreateLambda([this]() {
-                    // 선택된 항목의 이미지 업데이트 (이미지가 있는 경우)
-                    UpdateSelectedItemImage();
-                }),
-                FCanExecuteAction::CreateLambda([bHasImage]() { 
-                    // 이미지가 있는 경우에만 활성화
-                    return bHasImage; 
-                })
-            )
-        );
+        // 이미지 보기 메뉴는 제거
         
-        // 선택 노드 펼치기/접기 메뉴 항목들
+        // 선택 노드 펼치기 메뉴
         MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("하위 항목 모두 펼치기")),
-            FText::FromString(TEXT("선택한 항목의 모든 하위 항목을 펼칩니다")),
+            FText::FromString(TEXT("Expand All Children")),
+            FText::FromString(TEXT("Expand all child nodes of the selected item")),
             FSlateIcon(),
             FUIAction(
                 FExecuteAction::CreateLambda([this]() {
@@ -491,9 +477,10 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
             )
         );
         
+        // 선택 노드 접기 메뉴
         MenuBuilder.AddMenuEntry(
-            FText::FromString(TEXT("하위 항목 모두 접기")),
-            FText::FromString(TEXT("선택한 항목의 모든 하위 항목을 접습니다")),
+            FText::FromString(TEXT("Collapse All Children")),
+            FText::FromString(TEXT("Collapse all child nodes of the selected item")),
             FSlateIcon(),
             FUIAction(
                 FExecuteAction::CreateLambda([this]() {
@@ -569,12 +556,9 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetImageWidget()
 void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
 {
     // 이미 같은 상태면 아무것도 하지 않음
-    if (bFilteringImageNodes == bEnable)
-    {
-        return;
-    }
+	if (FilterManager->IsFilterEnabled("ImageFilter") == bEnable) { return; }
         
-    bFilteringImageNodes = bEnable;
+	FilterManager->SetFilterEnabled("ImageFilter", bEnable);
     
     UE_LOG(LogTemp, Display, TEXT("이미지 필터링 %s: 이미지 있는 파트 %d개"), 
         bEnable ? TEXT("활성화") : TEXT("비활성화"), FServiceLocator::GetImageManager()->GetPartsWithImageSet().Num());
@@ -826,53 +810,54 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
 // OnGetChildren 함수 구현
 void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<TSharedPtr<FPartTreeItem>>& OutChildren)
 {
-    if (bIsSearching && !SearchText.IsEmpty())
-    {
-        // 검색 중인 경우: 검색 결과에 있는 자식 항목이나 
-        // 검색 결과의 부모 경로에 있는 항목만 표시
-        for (const auto& Child : Item->Children)
-        {
-            if (SearchResults.Contains(Child))
-            {
-                // 직접 검색 결과인 경우
-                OutChildren.Add(Child);
-            }
-            else
-            {
-                // 자식 항목 중에 검색 결과가 있는지 확인
-                bool bHasSearchResultChild = false;
-                for (const auto& Result : SearchResults)
-                {
-                    if (FTreeViewUtils::IsChildOf(Result, Child))
-                    {
-                        bHasSearchResultChild = true;
-                        break;
-                    }
-                }
+	if (bIsSearching && !SearchText.IsEmpty())
+	{
+		// 검색 중인 경우: 검색 결과에 있는 자식 항목이나 
+		// 검색 결과의 부모 경로에 있는 항목만 표시
+		for (const auto& Child : Item->Children)
+		{
+			if (SearchResults.Contains(Child))
+			{
+				// 직접 검색 결과인 경우
+				OutChildren.Add(Child);
+			}
+			else
+			{
+				// 자식 항목 중에 검색 결과가 있는지 확인
+				bool bHasSearchResultChild = false;
+				for (const auto& Result : SearchResults)
+				{
+					if (FTreeViewUtils::IsChildOf(Result, Child))
+					{
+						bHasSearchResultChild = true;
+						break;
+					}
+				}
                 
-                if (bHasSearchResultChild)
-                {
-                    OutChildren.Add(Child);
-                }
-            }
-        }
-    }
-    else if (bFilteringImageNodes)
-    {
-        // 이미지 필터링 (FTreeViewUtils 사용)
-        for (const auto& Child : Item->Children)
-        {
-            if (FServiceLocator::GetImageManager()->HasImage(Child->PartNo) || FServiceLocator::GetImageManager()->HasChildWithImage(Child))
-            {
-                OutChildren.Add(Child);
-            }
-        }
-    }
-    else
-    {
-        // 필터링 없이 모든 자식 항목 표시
-        OutChildren = Item->Children;
-    }
+				if (bHasSearchResultChild)
+				{
+					OutChildren.Add(Child);
+				}
+			}
+		}
+	}
+	else if (FilterManager->IsFilterEnabled("ImageFilter"))
+	{
+		// 이미지 필터링
+		for (const auto& Child : Item->Children)
+		{
+			// 필터 관리자의 PassesAllFilters 함수를 사용하여 확인
+			if (FilterManager->PassesAllFilters(Child))
+			{
+				OutChildren.Add(Child);
+			}
+		}
+	}
+	else
+	{
+		// 필터링 없이 모든 자식 항목 표시
+		OutChildren = Item->Children;
+	}
 }
 
 // 항목의 경로를 펼치는 함수
