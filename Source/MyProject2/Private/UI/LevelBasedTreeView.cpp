@@ -961,7 +961,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     // 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
     FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
     
-    // 폴더 존재 확인 및 파일 찾기 코드 (변경 없음)
+    // 폴더 존재 확인 및 파일 찾기
     if (!FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*XMLDir))
     {
         FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 폴더가 존재하지 않습니다: ") + XMLDir));
@@ -1015,7 +1015,10 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     
     UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 시작: %s"), *FullFilePath);
     
-    // Datasmith 임포트 팩토리 및 옵션 생성/설정 (변경 없음)
+    // DatasmithSceneManager 인스턴스 생성
+    FDatasmithSceneManager SceneManager;
+    
+    // Datasmith 임포트 팩토리 및 옵션 생성/설정
     UDatasmithImportFactory* DatasmithFactory = NewObject<UDatasmithImportFactory>();
     if (!DatasmithFactory)
     {
@@ -1082,27 +1085,85 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     
     UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 완료: %s"), *FullFilePath);
     
-    // DatasmithSceneManager 생성 및 설정
-    FDatasmithSceneManager SceneManager;
-    
-    // GetObjects() 함수를 사용하여 DatasmithScene 객체 찾기
+    // 임포트된 DatasmithScene 객체 찾기
     bool bSceneFound = false;
+    AActor* SceneActor = nullptr;
+    
     const TArray<UObject*>& ImportedObjects = ImportTask->GetObjects();
     for (UObject* Object : ImportedObjects)
     {
         if (Object && Object->GetClass()->GetName().Contains(TEXT("DatasmithScene")))
         {
+            // DatasmithScene 객체를 SceneManager에 설정
             if (SceneManager.SetDatasmithScene(Object))
             {
                 UE_LOG(LogTemp, Display, TEXT("DatasmithScene 객체 찾음: %s"), *Object->GetName());
                 bSceneFound = true;
                 
-                // SceneManager를 통해 액터 이름 변경 처리
-                AActor* SceneActor = SceneManager.FindDatasmithSceneActor();
+                // 임포트된 DatasmithScene에서 DatasmithSceneActor 이름 가져오기
+                FString SceneActorName;
+                UClass* DatasmithSceneClass = Object->GetClass();
+                FProperty* SceneActorNameProperty = DatasmithSceneClass->FindPropertyByName(TEXT("Name"));
+                
+                if (SceneActorNameProperty)
+                {
+                    FStrProperty* StrProperty = CastField<FStrProperty>(SceneActorNameProperty);
+                    if (StrProperty)
+                    {
+                        SceneActorName = StrProperty->GetPropertyValue(SceneActorNameProperty->ContainerPtrToValuePtr<void>(Object));
+                    }
+                }
+                
+                // DatasmithSceneActor 찾기
+                UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+                if (EditorWorld)
+                {
+                    // 1. 임포트된 DatasmithScene의 이름으로 찾기 (더 정확한 방법)
+                    if (!SceneActorName.IsEmpty())
+                    {
+                        for (TActorIterator<AActor> It(EditorWorld); It; ++It)
+                        {
+                            AActor* Actor = *It;
+                            if (Actor && Actor->GetName().Contains(SceneActorName))
+                            {
+                                SceneActor = Actor;
+                                UE_LOG(LogTemp, Display, TEXT("임포트된 DatasmithScene의 이름으로 SceneActor 찾음: %s"), *SceneActor->GetName());
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 2. 이름으로 찾지 못한 경우 타입으로 찾기
+                    if (!SceneActor)
+                    {
+                        for (TActorIterator<AActor> It(EditorWorld); It; ++It)
+                        {
+                            AActor* Actor = *It;
+                            if (Actor && Actor->GetClass()->GetName().Contains(TEXT("DatasmithSceneActor")))
+                            {
+                                SceneActor = Actor;
+                                UE_LOG(LogTemp, Display, TEXT("타입으로 SceneActor 찾음: %s"), *SceneActor->GetName());
+                                break;
+                            }
+                        }
+                    }
+                }
+                
                 if (SceneActor)
                 {
+                    // SceneManager에 SceneActor 설정
+                    SceneManager.SetDatasmithSceneActor(SceneActor);
+                    
                     // 자식 액터 찾기
-                    AActor* TargetActor = SceneManager.GetFirstChildActor();
+                    AActor* TargetActor = nullptr;
+                    TArray<AActor*> ChildActors;
+                    SceneActor->GetAttachedActors(ChildActors);
+                    
+                    if (ChildActors.Num() > 0)
+                    {
+                        TargetActor = ChildActors[0];
+                    }
+                    
                     if (TargetActor)
                     {
                         // 액터 이름 변경
@@ -1140,8 +1201,8 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("DatasmithSceneActor를 찾을 수 없습니다."));
-                    FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("DatasmithSceneActor를 찾을 수 없습니다.")));
+                    UE_LOG(LogTemp, Warning, TEXT("임포트된 DatasmithSceneActor를 찾을 수 없습니다."));
+                    FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("임포트된 DatasmithSceneActor를 찾을 수 없습니다.")));
                 }
                 
                 break;

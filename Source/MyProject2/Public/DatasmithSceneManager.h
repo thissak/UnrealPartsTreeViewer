@@ -41,7 +41,19 @@ public:
 	void LogSceneInfo();
     
 	/**
-	 * 레벨에 스폰된 데이터스미스 씬 액터 찾기
+	 * 데이터스미스 씬 액터 설정
+	 * @param InSceneActor - 데이터스미스 씬 액터
+	 */
+	void SetDatasmithSceneActor(AActor* InSceneActor);
+	
+	/**
+	 * 저장된 데이터스미스 씬 액터 반환
+	 * @return 저장된 데이터스미스 씬 액터
+	 */
+	AActor* GetDatasmithSceneActor() const;
+    
+	/**
+	 * 레벨에 스폰된 데이터스미스 씬 액터 찾기 (월드 검색)
 	 * @return 데이터스미스 씬 액터
 	 */
 	AActor* FindDatasmithSceneActor();
@@ -68,6 +80,9 @@ public:
 private:
 	/** 데이터스미스 씬 객체 */
 	TWeakObjectPtr<UObject> DatasmithScene;
+	
+	/** 데이터스미스 씬 액터 */
+	TWeakObjectPtr<AActor> DatasmithSceneActor;
     
 	/** 투명도 검사 헬퍼 함수 */
 	bool HasTransparency(UMaterialInterface* Material);

@@ -10,6 +10,7 @@
 
 FDatasmithSceneManager::FDatasmithSceneManager()
     : DatasmithScene(nullptr)
+    , DatasmithSceneActor(nullptr)
 {
 }
 
@@ -24,6 +25,20 @@ bool FDatasmithSceneManager::SetDatasmithScene(UObject* InDatasmithScene)
     DatasmithScene = InDatasmithScene;
     UE_LOG(LogTemp, Display, TEXT("데이터스미스 씬 설정 완료: %s"), *InDatasmithScene->GetName());
     return true;
+}
+
+void FDatasmithSceneManager::SetDatasmithSceneActor(AActor* InSceneActor)
+{
+    DatasmithSceneActor = InSceneActor;
+    if (InSceneActor)
+    {
+        UE_LOG(LogTemp, Display, TEXT("데이터스미스 씬 액터 설정 완료: %s"), *InSceneActor->GetName());
+    }
+}
+
+AActor* FDatasmithSceneManager::GetDatasmithSceneActor() const
+{
+    return DatasmithSceneActor.Get();
 }
 
 TArray<UMaterialInterface*> FDatasmithSceneManager::FindTransparentMaterials()
@@ -135,6 +150,14 @@ void FDatasmithSceneManager::LogSceneInfo()
 
 AActor* FDatasmithSceneManager::FindDatasmithSceneActor()
 {
+    // 이미 저장된 씬 액터가 있고 유효하다면 반환
+    if (DatasmithSceneActor.IsValid())
+    {
+        UE_LOG(LogTemp, Display, TEXT("저장된 DatasmithSceneActor 사용: %s"), *DatasmithSceneActor->GetName());
+        return DatasmithSceneActor.Get();
+    }
+    
+    // 저장된 씬 액터가 없으면 에디터 월드에서 검색
     UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
     if (!EditorWorld)
     {
@@ -147,7 +170,10 @@ AActor* FDatasmithSceneManager::FindDatasmithSceneActor()
         AActor* Actor = *It;
         if (Actor && Actor->GetClass()->GetName().Contains(TEXT("DatasmithSceneActor")))
         {
-            UE_LOG(LogTemp, Display, TEXT("DatasmithSceneActor 찾음: %s"), *Actor->GetName());
+            UE_LOG(LogTemp, Display, TEXT("월드에서 DatasmithSceneActor 찾음: %s"), *Actor->GetName());
+            
+            // 찾은 액터를 멤버 변수에 저장
+            DatasmithSceneActor = Actor;
             return Actor;
         }
     }
@@ -253,9 +279,14 @@ void FDatasmithSceneManager::SeparateTransparentActors(const FString& PartNo)
 
 AActor* FDatasmithSceneManager::GetFirstChildActor()
 {
-    AActor* SceneActor = FindDatasmithSceneActor();
+    AActor* SceneActor = GetDatasmithSceneActor();
     if (!SceneActor)
-        return nullptr;
+    {
+        // 저장된 액터가 없으면 찾기 시도
+        SceneActor = FindDatasmithSceneActor();
+        if (!SceneActor)
+            return nullptr;
+    }
         
     TArray<AActor*> ChildActors;
     SceneActor->GetAttachedActors(ChildActors);
