@@ -21,7 +21,10 @@ public class MyProject2Editor : ModuleRules
                 "Slate",
                 "SlateCore",
                 "ToolMenus",
-                "MyProject2"
+                "MyProject2",
+                "DatasmithCore",         // 추가
+                "DatasmithContent",      // 추가
+                "AssetTools"             // AssetImportTask를 위해 추가
             }
         );
     }

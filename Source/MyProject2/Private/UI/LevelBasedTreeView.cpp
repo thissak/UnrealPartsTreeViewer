@@ -1,7 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "UI/LevelBasedTreeView.h"
-#include "AssetRegistry/AssetRegistryModule.h"
+
 #include "UI/PartMetadataWidget.h"
 #include "UI/TreeViewUtils.h"
 #include "ServiceLocator.h"
@@ -12,6 +12,12 @@
 #include "Widgets/Input/SSearchBox.h"
 #include "Windows/WindowsPlatformApplicationMisc.h"
 #include "SlateOptMacros.h"
+
+#include "DatasmithImportFactory.h"
+#include "DatasmithImportOptions.h"
+#include "AssetImportTask.h"
+#include "AssetToolsModule.h"
+#include "IAssetTools.h"
 
 #if WITH_EDITOR
 #include "Editor.h"
@@ -531,8 +537,8 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
     FString PartNo = SelectedItem->PartNo;
     
-	// 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
-	FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
+    // 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
+    FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
     
     // 폴더 존재 확인
     if (!FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*XMLDir))
@@ -553,13 +559,11 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     
     // 선택된 노드와 일치하는 파일 찾기
     FString MatchingFilePath;
-    TArray<FString> AllFilenames;
     
     for (const FString& FileName : FoundFiles)
     {
         // 파일명만 추출 (경로 없이)
         FString Filename = FPaths::GetBaseFilename(FileName);
-        AllFilenames.Add(Filename);
         
         // 언더바로 문자열 분리
         TArray<FString> Parts;
@@ -574,23 +578,88 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         }
     }
     
-    // 결과 표시
-    FString MessageText;
-    if (!MatchingFilePath.IsEmpty())
+    // 일치하는 파일을 찾지 못한 경우
+    if (MatchingFilePath.IsEmpty())
     {
-        MessageText = FString::Printf(TEXT("선택된 노드(%s)와 일치하는 3DXML 파일을 찾았습니다:\n%s"), 
-                                     *PartNo, *MatchingFilePath);
+        FString MessageText = FString::Printf(TEXT("선택된 노드(%s)와 일치하는 3DXML 파일을 찾지 못했습니다."), *PartNo);
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(MessageText));
+        return;
     }
-    else
+
+#if WITH_EDITOR
+    // 파일 임포트를 위한 전체 경로 작업
+    FString FullFilePath = FPaths::ConvertRelativePathToFull(MatchingFilePath);
+    
+    // 임포트 메시지 표시
+    FText ImportMessage = FText::FromString(FString::Printf(TEXT("%s 파일을 Datasmith로 임포트합니다."), 
+                                                           *FPaths::GetBaseFilename(MatchingFilePath)));
+    FMessageDialog::Open(EAppMsgType::Ok, ImportMessage);
+    
+    UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 시작: %s"), *FullFilePath);
+    
+    // Datasmith API를 사용하여 임포트 수행
+    UDatasmithImportFactory* DatasmithFactory = NewObject<UDatasmithImportFactory>();
+    if (!DatasmithFactory)
     {
-        MessageText = FString::Printf(TEXT("선택된 노드(%s)와 일치하는 3DXML 파일을 찾지 못했습니다.\n\n발견된 파일 목록:\n"), *PartNo);
-        for (const FString& Filename : AllFilenames)
-        {
-            MessageText += Filename + TEXT("\n");
-        }
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("Datasmith 임포트 팩토리를 생성할 수 없습니다.")));
+        return;
     }
     
-    FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(MessageText));
+    // 임포트 옵션 설정
+    UDatasmithImportOptions* ImportOptions = NewObject<UDatasmithImportOptions>();
+    if (ImportOptions)
+    {
+        // 상세 옵션 설정
+        ImportOptions->BaseOptions.SceneHandling = EDatasmithImportScene::AssetsOnly; // 에셋만 임포트
+        ImportOptions->BaseOptions.bIncludeGeometry = true;
+        ImportOptions->BaseOptions.bIncludeMaterial = true;
+        ImportOptions->BaseOptions.bIncludeLight = true;
+        ImportOptions->BaseOptions.bIncludeCamera = true;
+        ImportOptions->BaseOptions.bIncludeAnimation = true;
+        
+        // 충돌 정책 설정
+        ImportOptions->MaterialConflictPolicy = EDatasmithImportAssetConflictPolicy::Update;
+        ImportOptions->TextureConflictPolicy = EDatasmithImportAssetConflictPolicy::Update;
+        ImportOptions->StaticMeshActorImportPolicy = EDatasmithImportActorPolicy::Update;
+        ImportOptions->LightImportPolicy = EDatasmithImportActorPolicy::Update;
+        ImportOptions->CameraImportPolicy = EDatasmithImportActorPolicy::Update;
+        ImportOptions->OtherActorImportPolicy = EDatasmithImportActorPolicy::Update;
+        ImportOptions->MaterialQuality = EDatasmithImportMaterialQuality::UseRealFresnelCurves;
+        
+        // 스태틱 메시 옵션 설정
+        ImportOptions->BaseOptions.StaticMeshOptions.MinLightmapResolution = EDatasmithImportLightmapMin::LIGHTMAP_64;
+        ImportOptions->BaseOptions.StaticMeshOptions.MaxLightmapResolution = EDatasmithImportLightmapMax::LIGHTMAP_1024;
+        ImportOptions->BaseOptions.StaticMeshOptions.bGenerateLightmapUVs = true;
+        ImportOptions->BaseOptions.StaticMeshOptions.bRemoveDegenerates = true;
+        
+        // 파일 정보 설정
+        ImportOptions->FileName = FPaths::GetCleanFilename(FullFilePath);
+        ImportOptions->FilePath = FullFilePath;
+        ImportOptions->SourceUri = FullFilePath;
+    }
+    
+    // 임포트 태스크 생성
+    UAssetImportTask* ImportTask = NewObject<UAssetImportTask>();
+    ImportTask->Filename = FullFilePath;
+    ImportTask->DestinationPath = FString::Printf(TEXT("/Game/Datasmith/%s"), *PartNo);
+    ImportTask->Options = ImportOptions;
+    ImportTask->Factory = DatasmithFactory;
+    ImportTask->bSave = true;
+    ImportTask->bAutomated = true;
+    
+    // AssetTools 모듈을 사용하여 임포트 수행
+    FAssetToolsModule& AssetToolsModule = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools");
+    TArray<UAssetImportTask*> ImportTasks;
+    ImportTasks.Add(ImportTask);
+    
+    AssetToolsModule.Get().ImportAssetTasks(ImportTasks);
+    
+    UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 처리 시작됨: %s -> /Game/Datasmith/%s"), 
+           *FullFilePath, *PartNo);
+#else
+    // 에디터가 아닌 환경에서는 임포트 불가
+    FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 파일 임포트는 에디터 모드에서만 가능합니다.")));
+#endif
 }
 
 // 트리 항목과 그 하위 항목들을 재귀적으로 펼치거나 접는 함수

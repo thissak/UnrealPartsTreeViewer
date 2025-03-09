@@ -7,14 +7,29 @@ public class MyProject2 : ModuleRules
 	public MyProject2(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "Slate", "SlateCore", "ApplicationCore" });
+    
+		// Public 의존성: 다른 모듈에서도 접근 가능하게 해야 하는 모듈
+		PublicDependencyModuleNames.AddRange(new string[] 
+		{ 
+			"Core", 
+			"CoreUObject", 
+			"Engine", 
+			"InputCore", 
+			"EnhancedInput", 
+			"Slate", 
+			"SlateCore", 
+			"ApplicationCore" 
+		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd" });
+		// Private 의존성: 이 모듈 내에서만 사용되는 모듈
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"UnrealEd",
+			"DatasmithCore",
+			"DatasmithContent",
+			"DatasmithImporter"
+		});
 
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-		
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
 
