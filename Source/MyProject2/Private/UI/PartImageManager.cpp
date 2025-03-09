@@ -7,6 +7,9 @@
 #include "ServiceLocator.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UI/TreeViewUtils.h"
+#include "GenericPlatform/GenericPlatformFile.h"
+#include "HAL/PlatformFilemanager.h"
+#include "Misc/Paths.h"
 
 FPartImageManager::FPartImageManager()
     : bIsInitialized(false)
@@ -34,37 +37,49 @@ void FPartImageManager::CacheImageExistence(const TMap<FString, TSharedPtr<FPart
     PartsWithImageSet.Empty();
     PartNoToImagePathMap.Empty();
     
-    // 이미지 디렉토리 경로 (Game 폴더 상대 경로)
+    // 이미지 폴더 경로 (Game 폴더 상대 경로)
     const FString ImageDir = TEXT("/Game/Data/00_image");
     
-    // 에셋 레지스트리 활용
-    TArray<FAssetData> AssetList;
-    FARFilter Filter;
+    // 물리적 이미지 폴더 경로 (프로젝트 콘텐츠 폴더 내)
+    FString PhysicalImageDir = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/00_image"));
     
-    // ClassNames 대신 ClassPaths 사용
-    Filter.ClassPaths.Add(UTexture2D::StaticClass()->GetClassPathName());
-    Filter.PackagePaths.Add(*ImageDir);
-    
-    // 에셋 레지스트리에서 모든 텍스처 에셋 찾기
-    FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-    AssetRegistryModule.Get().GetAssets(Filter, AssetList);
-    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 시작: 총 %d개 에셋 발견"), AssetList.Num());
-    
-    // 에셋 처리
-    for (const FAssetData& Asset : AssetList)
+    // 디렉토리가 존재하는지 확인
+    IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+    if (!PlatformFile.DirectoryExists(*PhysicalImageDir))
     {
-        FString AssetName = Asset.AssetName.ToString();
-        FString AssetPath = Asset.GetObjectPathString();
+        UE_LOG(LogTemp, Warning, TEXT("이미지 디렉토리가 존재하지 않음: %s"), *PhysicalImageDir);
+        return;
+    }
+    
+    // 폴더 내 모든 uasset 파일 찾기
+    TArray<FString> FoundFiles;
+    PlatformFile.FindFilesRecursively(FoundFiles, *PhysicalImageDir, TEXT(".uasset"));
+    
+    UE_LOG(LogTemp, Display, TEXT("이미지 캐싱 시작: 총 %d개 uasset 파일 발견"), FoundFiles.Num());
+    
+    // 모든 uasset 파일 처리
+    for (const FString& FilePath : FoundFiles)
+    {
+        // 파일 이름에서 확장자 제거
+        FString FileName = FPaths::GetBaseFilename(FilePath);
         
-        // TreeViewUtils를 사용하여 에셋 이름에서 파트 번호 추출
-        FString PartNo = FTreeViewUtils::ExtractPartNoFromAssetName(AssetName);
+        // TreeViewUtils를 사용하여 파일 이름에서 파트 번호 추출
+        FString PartNo = FTreeViewUtils::ExtractPartNoFromAssetName(FileName);
         
         // 파트 번호가 유효하고 맵에 존재하는지 확인
         if (!PartNo.IsEmpty() && PartNoToItemMap.Contains(PartNo))
         {
+            // 상대 에셋 경로 생성 (/Game/...)
+            FString RelativePath = FilePath;
+            FPaths::MakePathRelativeTo(RelativePath, *FPaths::ProjectContentDir());
+            RelativePath = RelativePath.Replace(TEXT(".uasset"), TEXT(""));
+            FString AssetPath = FString::Printf(TEXT("/Game/%s"), *RelativePath);
+            AssetPath = AssetPath.Replace(TEXT("\\"), TEXT("/"));
+            
             PartsWithImageSet.Add(PartNo);
-            // 실제 에셋 경로 저장
             PartNoToImagePathMap.Add(PartNo, AssetPath);
+            
+            UE_LOG(LogTemp, Verbose, TEXT("이미지 매핑: PartNo=%s, AssetPath=%s"), *PartNo, *AssetPath);
         }
     }
     
@@ -116,7 +131,7 @@ UTexture2D* FPartImageManager::LoadPartImage(const FString& PartNo)
     
     if (!Texture)
     {
-        UE_LOG(LogTemp, Warning, TEXT("이미지 로드 실패: %s"), *AssetPath);
+        UE_LOG(LogTemp, Warning, TEXT("이미지 에셋 로드 실패: %s"), *AssetPath);
     }
     
     return Texture;
@@ -135,8 +150,7 @@ FString FPartImageManager::GetImagePathForPart(const FString& PartNo) const
         return *AssetPathPtr;
     }
     
-    // 경로가 저장되지 않은 경우 기존 방식으로 경로 구성
-    return FString::Printf(TEXT("/Game/00_image/aaa_bbb_ccc_%s"), *PartNo);
+    return FString();
 }
 
 // 자식 중에 이미지가 있는 항목이 있는지 확인하는 함수
