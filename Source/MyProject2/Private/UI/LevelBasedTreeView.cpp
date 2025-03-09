@@ -496,10 +496,101 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                 })
             )
         );
+
+    	// 3DXML 파일 임포트 메뉴
+    	MenuBuilder.AddMenuEntry(
+			FText::FromString(TEXT("Import 3DXML to Node")),
+			FText::FromString(TEXT("Import 3DXML file to the selected node")),
+			FSlateIcon(),
+			FUIAction(
+				FExecuteAction::CreateLambda([this]() {
+					ImportXMLToSelectedNode();
+				}),
+				FCanExecuteAction::CreateLambda([this]() { 
+					// 하나의 항목이 선택되었을 때만 활성화
+					return TreeView->GetSelectedItems().Num() == 1; 
+				})
+			)
+		);
     }
     MenuBuilder.EndSection();
 
     return MenuBuilder.MakeWidget();
+}
+
+void SLevelBasedTreeView::ImportXMLToSelectedNode()
+{
+    // 선택된 노드 확인
+    TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
+    if (SelectedItems.Num() != 1)
+    {
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 임포트를 위해 정확히 하나의 노드가 선택되어야 합니다.")));
+        return;
+    }
+    
+    TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
+    FString PartNo = SelectedItem->PartNo;
+    
+	// 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
+	FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
+    
+    // 폴더 존재 확인
+    if (!FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*XMLDir))
+    {
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 폴더가 존재하지 않습니다: ") + XMLDir));
+        return;
+    }
+    
+    // 폴더 내 모든 3DXML 파일 찾기
+    TArray<FString> FoundFiles;
+    IFileManager::Get().FindFiles(FoundFiles, *(XMLDir / TEXT("*.3dxml")), true, false);
+    
+    if (FoundFiles.Num() == 0)
+    {
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 폴더에 .3dxml 파일이 없습니다.")));
+        return;
+    }
+    
+    // 선택된 노드와 일치하는 파일 찾기
+    FString MatchingFilePath;
+    TArray<FString> AllFilenames;
+    
+    for (const FString& FileName : FoundFiles)
+    {
+        // 파일명만 추출 (경로 없이)
+        FString Filename = FPaths::GetBaseFilename(FileName);
+        AllFilenames.Add(Filename);
+        
+        // 언더바로 문자열 분리
+        TArray<FString> Parts;
+        Filename.ParseIntoArray(Parts, TEXT("_"));
+        
+        // 언더바로 구분된 부분이 4개 이상인지 확인하고, 3번 인덱스가 파트 번호인지 확인
+        if (Parts.Num() >= 4 && Parts[3] == PartNo)
+        {
+            // 전체 경로 구성
+            MatchingFilePath = FPaths::Combine(XMLDir, FileName);
+            break;
+        }
+    }
+    
+    // 결과 표시
+    FString MessageText;
+    if (!MatchingFilePath.IsEmpty())
+    {
+        MessageText = FString::Printf(TEXT("선택된 노드(%s)와 일치하는 3DXML 파일을 찾았습니다:\n%s"), 
+                                     *PartNo, *MatchingFilePath);
+    }
+    else
+    {
+        MessageText = FString::Printf(TEXT("선택된 노드(%s)와 일치하는 3DXML 파일을 찾지 못했습니다.\n\n발견된 파일 목록:\n"), *PartNo);
+        for (const FString& Filename : AllFilenames)
+        {
+            MessageText += Filename + TEXT("\n");
+        }
+    }
+    
+    FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(MessageText));
 }
 
 // 트리 항목과 그 하위 항목들을 재귀적으로 펼치거나 접는 함수

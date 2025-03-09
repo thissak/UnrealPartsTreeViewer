@@ -75,6 +75,9 @@ public:
     // 선택된 항목 메타데이터 텍스트 반환
     FText GetSelectedItemMetadata() const;
 
+	// XML파일 임포트
+	void ImportXMLToSelectedNode();
+
 private:
     //===== 검색 관련 변수 =====//
     FString SearchText;               // 현재 검색어
