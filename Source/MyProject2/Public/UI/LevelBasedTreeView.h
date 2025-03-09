@@ -78,6 +78,10 @@ public:
 	// XML파일 임포트
 	void ImportXMLToSelectedNode();
 
+	void RemoveChildActorsExceptStaticMesh();
+	void FindAllStaticMeshActors(AActor* RootActor, TArray<AStaticMeshActor*>& OutStaticMeshActors);
+	void RemoveNonStaticMeshChildren(AActor* Actor, int32& OutRemovedCount);
+
 private:
     //===== 검색 관련 변수 =====//
     FString SearchText;               // 현재 검색어
