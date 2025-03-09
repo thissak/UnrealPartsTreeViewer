@@ -81,6 +81,7 @@ public:
 	void RemoveChildActorsExceptStaticMesh();
 	void FindAllStaticMeshActors(AActor* RootActor, TArray<AStaticMeshActor*>& OutStaticMeshActors);
 	void RemoveNonStaticMeshChildren(AActor* Actor, int32& OutRemovedCount);
+	void CleanupNonStaticMeshActors(AActor* RootActor);
 
 private:
     //===== 검색 관련 변수 =====//

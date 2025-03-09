@@ -17,6 +17,7 @@
 #include "DatasmithImportOptions.h"
 #include "AssetImportTask.h"
 #include "AssetToolsModule.h"
+#include "DatasmithSceneManager.h"
 #include "IAssetTools.h"
 #include "Engine/StaticMeshActor.h"
 
@@ -960,7 +961,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     // 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
     FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
     
-    // 폴더 존재 확인
+    // 폴더 존재 확인 및 파일 찾기 코드 (변경 없음)
     if (!FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*XMLDir))
     {
         FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 폴더가 존재하지 않습니다: ") + XMLDir));
@@ -1014,7 +1015,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     
     UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 시작: %s"), *FullFilePath);
     
-    // Datasmith API를 사용하여 임포트 수행
+    // Datasmith 임포트 팩토리 및 옵션 생성/설정 (변경 없음)
     UDatasmithImportFactory* DatasmithFactory = NewObject<UDatasmithImportFactory>();
     if (!DatasmithFactory)
     {
@@ -1081,121 +1082,182 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     
     UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 완료: %s"), *FullFilePath);
     
-    // 임포트된 액터 찾기 - 다양한 방법으로 시도
-    AActor* ImportedRootActor = nullptr;
+    // DatasmithSceneManager 생성 및 설정
+    FDatasmithSceneManager SceneManager;
     
-    // 1. Result 배열에서 DatasmithScene 관련 객체 찾기
-    for (UObject* ResultObject : ImportTask->Result)
+    // GetObjects() 함수를 사용하여 DatasmithScene 객체 찾기
+    bool bSceneFound = false;
+    const TArray<UObject*>& ImportedObjects = ImportTask->GetObjects();
+    for (UObject* Object : ImportedObjects)
     {
-        if (ResultObject && ResultObject->IsA<AActor>())
+        if (Object && Object->GetClass()->GetName().Contains(TEXT("DatasmithScene")))
         {
-            AActor* Actor = Cast<AActor>(ResultObject);
-            // DatasmithSceneActor 확인
-            if (Actor->GetClass()->GetName().Contains(TEXT("DatasmithSceneActor")))
+            if (SceneManager.SetDatasmithScene(Object))
             {
-                ImportedRootActor = Actor;
-                UE_LOG(LogTemp, Display, TEXT("임포트 결과에서 직접 DatasmithSceneActor 찾음: %s"), *Actor->GetName());
-                break;
-            }
-        }
-    }
-    
-    // 2. ImportedObjectPaths에서 액터 경로 찾기
-    if (!ImportedRootActor)
-    {
-        FString ActorPath;
-        for (const FString& ObjectPath : ImportTask->ImportedObjectPaths)
-        {
-            if (ObjectPath.Contains(TEXT("DatasmithScene")))
-            {
-                ActorPath = ObjectPath;
-                break;
-            }
-        }
-        
-        // 경로를 찾았다면 객체 로드
-        if (!ActorPath.IsEmpty())
-        {
-            UObject* FoundObject = FindObject<UObject>(nullptr, *ActorPath);
-            if (FoundObject && FoundObject->IsA<AActor>())
-            {
-                ImportedRootActor = Cast<AActor>(FoundObject);
-                UE_LOG(LogTemp, Display, TEXT("경로에서 DatasmithSceneActor 찾음: %s"), *ActorPath);
-            }
-        }
-    }
-    
-    // 3. 월드에서 검색 (마지막 수단)
-    if (!ImportedRootActor)
-    {
-        UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
-        if (EditorWorld)
-        {
-            for (TActorIterator<AActor> It(EditorWorld); It; ++It)
-            {
-                AActor* Actor = *It;
-                if (Actor && Actor->GetClass()->GetName().Contains(TEXT("DatasmithSceneActor")))
+                UE_LOG(LogTemp, Display, TEXT("DatasmithScene 객체 찾음: %s"), *Object->GetName());
+                bSceneFound = true;
+                
+                // SceneManager를 통해 액터 이름 변경 처리
+                AActor* SceneActor = SceneManager.FindDatasmithSceneActor();
+                if (SceneActor)
                 {
-                    ImportedRootActor = Actor;
-                    UE_LOG(LogTemp, Display, TEXT("월드에서 DatasmithSceneActor 찾음: %s"), *Actor->GetName());
-                    break;
+                    // 자식 액터 찾기
+                    AActor* TargetActor = SceneManager.GetFirstChildActor();
+                    if (TargetActor)
+                    {
+                        // 액터 이름 변경
+                        FString SafeActorName = PartNo;
+                        SafeActorName.ReplaceInline(TEXT(" "), TEXT("_"));
+                        SafeActorName.ReplaceInline(TEXT("-"), TEXT("_"));
+                        
+                        TargetActor->Rename(*SafeActorName);
+                        TargetActor->SetActorLabel(*PartNo);
+                        
+                        // StaticMesh만 남기고 다른 자식 액터 제거
+                        CleanupNonStaticMeshActors(TargetActor);
+                        
+                        // 액터 선택
+                        GEditor->SelectNone(true, true, false);
+                        GEditor->SelectActor(TargetActor, true, true, true);
+                        
+                        UE_LOG(LogTemp, Display, TEXT("액터 이름 변경 및 선택 완료: %s (원래 이름: %s)"), 
+                               *SafeActorName, *PartNo);
+                               
+                        // DatasmithSceneActor 제거
+                        UE_LOG(LogTemp, Display, TEXT("DatasmithSceneActor 제거: %s"), *SceneActor->GetName());
+                        SceneActor->Destroy();
+                        
+                        // 임포트 성공 메시지 표시
+                        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(
+                            FString::Printf(TEXT("3DXML 파일 임포트 완료: %s\n액터 이름이 %s로 변경되었습니다."),
+                                            *MatchingFileName, *PartNo)));
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("DatasmithSceneActor에 자식 액터가 없습니다."));
+                        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("DatasmithSceneActor에 자식 액터가 없습니다.")));
+                    }
                 }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("DatasmithSceneActor를 찾을 수 없습니다."));
+                    FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("DatasmithSceneActor를 찾을 수 없습니다.")));
+                }
+                
+                break;
             }
         }
     }
     
-    // 발견된 액터 처리
-    if (ImportedRootActor)
+    if (!bSceneFound)
     {
-        // 자식 액터 찾기
-        TArray<AActor*> ChildActors;
-        ImportedRootActor->GetAttachedActors(ChildActors);
-        
-        AActor* TargetActor = nullptr;
-        if (ChildActors.Num() > 0)
-        {
-            // 첫 번째 자식을 타겟 액터로 설정
-            TargetActor = ChildActors[0];
-            
-            // 액터 이름 변경
-            FString SafeActorName = PartNo;
-            SafeActorName.ReplaceInline(TEXT(" "), TEXT("_"));
-            SafeActorName.ReplaceInline(TEXT("-"), TEXT("_"));
-            
-            TargetActor->Rename(*SafeActorName);
-            TargetActor->SetActorLabel(*PartNo);
-            
-            // 액터 선택
-            GEditor->SelectNone(true, true, false);
-            GEditor->SelectActor(TargetActor, true, true, true);
-            
-            UE_LOG(LogTemp, Display, TEXT("액터 이름 변경 및 선택 완료: %s (원래 이름: %s)"), 
-                   *SafeActorName, *PartNo);
-            
-            // 임포트 성공 메시지 표시
-            FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(
-                FString::Printf(TEXT("3DXML 파일 임포트 완료: %s\n액터 이름이 %s로 변경되었습니다."),
-                                *MatchingFileName, *PartNo)));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("DatasmithSceneActor에 자식 액터가 없습니다."));
-            FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("DatasmithSceneActor에 자식 액터가 없습니다.")));
-        }
-        
-        // DatasmithSceneActor 제거
-        UE_LOG(LogTemp, Display, TEXT("DatasmithSceneActor 제거: %s"), *ImportedRootActor->GetName());
-        ImportedRootActor->Destroy();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("임포트된 DatasmithSceneActor를 찾을 수 없습니다."));
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("임포트된 DatasmithSceneActor를 찾을 수 없습니다.")));
+        UE_LOG(LogTemp, Warning, TEXT("임포트된 DatasmithScene 객체를 찾을 수 없습니다."));
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("임포트된 DatasmithScene 객체를 찾을 수 없습니다.")));
     }
 #else
     // 에디터가 아닌 환경에서는 임포트 불가
     FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 파일 임포트는 에디터 모드에서만 가능합니다.")));
 #endif
+}
+
+// StaticMesh 액터만 유지하고 나머지 자식 액터 제거하는 함수
+void SLevelBasedTreeView::CleanupNonStaticMeshActors(AActor* RootActor)
+{
+    if (!RootActor)
+        return;
+        
+    // 모든 StaticMesh 액터 찾기
+    TArray<AStaticMeshActor*> StaticMeshActors;
+    FindAllStaticMeshActors(RootActor, StaticMeshActors);
+    
+    UE_LOG(LogTemp, Display, TEXT("StaticMesh 액터 발견: %d개"), StaticMeshActors.Num());
+    
+    // 모든 StaticMesh 액터를 루트 액터에 직접 연결
+    for (AStaticMeshActor* MeshActor : StaticMeshActors)
+    {
+        // 이미 직접 자식이면 건너뛰기
+        AActor* CurrentParent = MeshActor->GetAttachParentActor();
+        if (CurrentParent == RootActor)
+            continue;
+            
+        // 월드 변환 저장
+        FTransform OriginalTransform = MeshActor->GetActorTransform();
+        
+        // 현재 부모에서 분리
+        MeshActor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+        
+        // 루트 액터에 직접 연결
+        MeshActor->AttachToActor(RootActor, FAttachmentTransformRules::KeepWorldTransform);
+        
+        UE_LOG(LogTemp, Verbose, TEXT("StaticMesh 액터 '%s'를 루트에 직접 연결"), *MeshActor->GetName());
+    }
+    
+    // StaticMesh가 아닌 자식 액터 제거
+    int32 RemovedCount = 0;
+    RemoveNonStaticMeshChildren(RootActor, RemovedCount);
+    
+    UE_LOG(LogTemp, Display, TEXT("StaticMesh가 아닌 액터 제거 완료: %d개 제거됨"), RemovedCount);
+}
+
+// 액터의 모든 하위 구조에서 StaticMeshActor를 찾는 함수
+void SLevelBasedTreeView::FindAllStaticMeshActors(AActor* RootActor, TArray<AStaticMeshActor*>& OutStaticMeshActors)
+{
+    if (!RootActor)
+        return;
+    
+    // 자식 액터 목록 가져오기
+    TArray<AActor*> ChildActors;
+    RootActor->GetAttachedActors(ChildActors);
+    
+    // 각 자식 액터에 대해 처리
+    for (AActor* ChildActor : ChildActors)
+    {
+        if (ChildActor)
+        {
+            // StaticMeshActor인 경우 결과 배열에 추가
+            if (ChildActor->IsA(AStaticMeshActor::StaticClass()))
+            {
+                OutStaticMeshActors.Add(Cast<AStaticMeshActor>(ChildActor));
+            }
+            
+            // 하위 액터들을 재귀적으로 검색
+            FindAllStaticMeshActors(ChildActor, OutStaticMeshActors);
+        }
+    }
+}
+
+// StaticMeshActor를 제외한 자식 액터들을 재귀적으로 제거하는 함수
+void SLevelBasedTreeView::RemoveNonStaticMeshChildren(AActor* Actor, int32& OutRemovedCount)
+{
+    if (!Actor)
+        return;
+    
+    // 자식 액터 목록 가져오기
+    TArray<AActor*> ChildActors;
+    Actor->GetAttachedActors(ChildActors);
+    
+    // 각 자식 액터에 대해 처리
+    for (AActor* ChildActor : ChildActors)
+    {
+        if (ChildActor)
+        {
+            // StaticMeshActor인 경우 스킵하고 보존
+            if (ChildActor->IsA(AStaticMeshActor::StaticClass()))
+            {
+                UE_LOG(LogTemp, Verbose, TEXT("StaticMeshActor 유지: %s"), *ChildActor->GetName());
+            }
+            else
+            {
+                // 일반 Actor인 경우, 그 자식들을 먼저 재귀적으로 처리
+                RemoveNonStaticMeshChildren(ChildActor, OutRemovedCount);
+                
+                // 그 다음 현재 Actor 제거
+                UE_LOG(LogTemp, Verbose, TEXT("액터 제거: %s"), *ChildActor->GetName());
+                ChildActor->Destroy();
+                OutRemovedCount++;
+            }
+        }
+    }
 }
 
 void SLevelBasedTreeView::RemoveChildActorsExceptStaticMesh()
@@ -1356,70 +1418,5 @@ void SLevelBasedTreeView::RemoveChildActorsExceptStaticMesh()
     }
 #else
     FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("자식 액터 제거는 에디터 모드에서만 가능합니다.")));
-#endif
-}
-
-// 액터의 모든 하위 구조에서 StaticMeshActor를 찾는 함수
-void SLevelBasedTreeView::FindAllStaticMeshActors(AActor* RootActor, TArray<AStaticMeshActor*>& OutStaticMeshActors)
-{
-#if WITH_EDITOR
-    if (!RootActor)
-        return;
-    
-    // 자식 액터 목록 가져오기
-    TArray<AActor*> ChildActors;
-    RootActor->GetAttachedActors(ChildActors);
-    
-    // 각 자식 액터에 대해 처리
-    for (AActor* ChildActor : ChildActors)
-    {
-        if (ChildActor)
-        {
-            // StaticMeshActor인 경우 결과 배열에 추가
-            if (ChildActor->IsA(AStaticMeshActor::StaticClass()))
-            {
-                OutStaticMeshActors.Add(Cast<AStaticMeshActor>(ChildActor));
-            }
-            
-            // 하위 액터들을 재귀적으로 검색
-            FindAllStaticMeshActors(ChildActor, OutStaticMeshActors);
-        }
-    }
-#endif
-}
-
-// StaticMeshActor를 제외한 자식 액터들을 재귀적으로 제거하는 함수
-void SLevelBasedTreeView::RemoveNonStaticMeshChildren(AActor* Actor, int32& OutRemovedCount)
-{
-#if WITH_EDITOR
-    if (!Actor)
-        return;
-    
-    // 자식 액터 목록 가져오기
-    TArray<AActor*> ChildActors;
-    Actor->GetAttachedActors(ChildActors);
-    
-    // 각 자식 액터에 대해 처리
-    for (AActor* ChildActor : ChildActors)
-    {
-        if (ChildActor)
-        {
-            // StaticMeshActor인 경우 스킵하고 보존
-            if (ChildActor->IsA(AStaticMeshActor::StaticClass()))
-            {
-                UE_LOG(LogTemp, Display, TEXT("StaticMeshActor 유지: %s"), *ChildActor->GetName());
-            }
-            else
-            {
-                // 일반 Actor인 경우, 그 자식들을 먼저 재귀적으로 처리
-                RemoveNonStaticMeshChildren(ChildActor, OutRemovedCount);
-                
-                // 그 다음 현재 Actor 제거
-                UE_LOG(LogTemp, Display, TEXT("Actor 제거: %s"), *ChildActor->GetName());
-                ChildActor->Destroy();
-                OutRemovedCount++;
-            }
-        }
-    }
 #endif
 }
