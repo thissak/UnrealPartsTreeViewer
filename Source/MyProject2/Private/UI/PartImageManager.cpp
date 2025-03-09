@@ -6,6 +6,7 @@
 #include "Engine/Texture2D.h"
 #include "ServiceLocator.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "UI/TreeViewUtils.h"
 
 FPartImageManager::FPartImageManager()
     : bIsInitialized(false)
@@ -55,23 +56,15 @@ void FPartImageManager::CacheImageExistence(const TMap<FString, TSharedPtr<FPart
         FString AssetName = Asset.AssetName.ToString();
         FString AssetPath = Asset.GetObjectPathString();
         
-        // 언더바로 문자열 분리
-        TArray<FString> Parts;
-        AssetName.ParseIntoArray(Parts, TEXT("_"));
+        // TreeViewUtils를 사용하여 에셋 이름에서 파트 번호 추출
+        FString PartNo = FTreeViewUtils::ExtractPartNoFromAssetName(AssetName);
         
-        // 언더바로 구분된 부분이 4개 이상인지 확인
-        if (Parts.Num() >= 4)
+        // 파트 번호가 유효하고 맵에 존재하는지 확인
+        if (!PartNo.IsEmpty() && PartNoToItemMap.Contains(PartNo))
         {
-            // 3번째 인덱스가 파트 번호
-            FString PartNo = Parts[3];
-            
-            // PartsWithImageSet에 파트 번호 추가
-            if(PartNoToItemMap.Contains(PartNo))
-            {
-                PartsWithImageSet.Add(PartNo);
-                // 실제 에셋 경로 저장
-                PartNoToImagePathMap.Add(PartNo, AssetPath);
-            }
+            PartsWithImageSet.Add(PartNo);
+            // 실제 에셋 경로 저장
+            PartNoToImagePathMap.Add(PartNo, AssetPath);
         }
     }
     

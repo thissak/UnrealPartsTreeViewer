@@ -280,3 +280,70 @@ int32 FTreeViewUtils::CreateAndGroupItems(
     
     return ValidItemCount;
 }
+
+FFileMatchResult FTreeViewUtils::FindMatchingFileForPartNo(
+    const FString& DirectoryPath,
+    const FString& FilePattern,
+    const FString& PartNo,
+    int32 PartIndexInFileName)
+{
+    FFileMatchResult Result;
+    
+    // 디렉토리 존재 확인
+    if (!FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*DirectoryPath))
+    {
+        Result.ErrorMessage = FString::Printf(TEXT("디렉토리가 존재하지 않습니다: %s"), *DirectoryPath);
+        return Result;
+    }
+    
+    // 폴더 내 모든 파일 찾기
+    TArray<FString> FoundFiles;
+    IFileManager::Get().FindFiles(FoundFiles, *(DirectoryPath / FilePattern), true, false);
+    
+    if (FoundFiles.Num() == 0)
+    {
+        Result.ErrorMessage = FString::Printf(TEXT("%s 디렉토리에 %s 패턴의 파일이 없습니다."), 
+                                             *DirectoryPath, *FilePattern);
+        return Result;
+    }
+    
+    // 선택된 노드와 일치하는 파일 찾기
+    for (const FString& FileName : FoundFiles)
+    {
+        // 파일명만 추출 (경로 없이)
+        FString Filename = FPaths::GetBaseFilename(FileName);
+        
+        // 언더바로 문자열 분리
+        TArray<FString> Parts;
+        Filename.ParseIntoArray(Parts, TEXT("_"));
+        
+        // 언더바로 구분된 부분이 충분히 있는지 확인하고, 지정된 인덱스가 파트 번호인지 확인
+        if (Parts.Num() > PartIndexInFileName && Parts[PartIndexInFileName] == PartNo)
+        {
+            // 결과 설정
+            Result.FilePath = FPaths::Combine(DirectoryPath, FileName);
+            Result.FileName = Filename;
+            Result.bFound = true;
+            return Result;
+        }
+    }
+    
+    // 일치하는 파일을 찾지 못한 경우
+    Result.ErrorMessage = FString::Printf(TEXT("파트 번호(%s)와 일치하는 파일을 찾지 못했습니다."), *PartNo);
+    return Result;
+}
+
+FString FTreeViewUtils::ExtractPartNoFromAssetName(const FString& AssetName, int32 PartIndex)
+{
+    // 언더바로 문자열 분리
+    TArray<FString> Parts;
+    AssetName.ParseIntoArray(Parts, TEXT("_"));
+    
+    // 지정된 인덱스가 배열 범위 내에 있는지 확인
+    if (Parts.Num() > PartIndex)
+    {
+        return Parts[PartIndex];
+    }
+    
+    return FString();
+}

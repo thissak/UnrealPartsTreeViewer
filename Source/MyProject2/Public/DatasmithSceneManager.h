@@ -4,6 +4,9 @@
 #include "CoreMinimal.h"
 #include "Materials/MaterialInterface.h"
 
+class UDatasmithImportOptions;
+class UDatasmithImportFactory;
+
 /**
  * 데이터스미스 씬과 관련된 작업을 관리하는 클래스
  * 투명 메터리얼 감지 및 해당 메시 관리 등의 기능 제공
@@ -57,6 +60,13 @@ public:
 	 * @return 데이터스미스 씬 액터
 	 */
 	AActor* FindDatasmithSceneActor();
+
+	/**
+	 * 임포트된 DatasmithScene 객체로부터 SceneActor 찾기
+	 * @param DatasmithScene - 임포트된 DatasmithScene 객체
+	 * @return 찾은 DatasmithSceneActor 또는 nullptr
+	 */
+	AActor* FindDatasmithSceneActorFromImport(UObject* InDatasmithScene);
     
 	/**
 	 * 액터 이름 변경
@@ -76,6 +86,43 @@ public:
 	 * @return 첫 번째 자식 액터
 	 */
 	AActor* GetFirstChildActor();
+
+	/**
+	 * 액터의 이름을 변경하고 자식 액터를 정리
+	 * @param TargetActor - 처리할 타겟 액터
+	 * @param PartNo - 파트 번호 (이름에 사용)
+	 * @return 처리된 액터
+	 */
+	AActor* RenameAndCleanupActor(AActor* TargetActor, const FString& PartNo);
+
+	/**
+	 * Datasmith 임포트 옵션 생성
+	 * @param FilePath - 임포트할 파일 경로
+	 * @return 설정된 임포트 옵션
+	 */
+	UDatasmithImportOptions* CreateImportOptions(const FString& FilePath);
+
+	/**
+	 * 3DXML 파일 임포트 및 결과 반환
+	 * @param FilePath - 임포트할 파일 경로
+	 * @param DestinationPath - 대상 경로 (콘텐츠 브라우저)
+	 * @return 임포트된 객체 배열
+	 */
+	TArray<UObject*> ImportDatasmithFile(const FString& FilePath, const FString& DestinationPath);
+
+	/**
+	 * 3DXML 파일 임포트 및 처리 통합 함수
+	 * @param FilePath - 임포트할 파일 경로
+	 * @param PartNo - 파트 번호
+	 * @return 처리된 결과 액터
+	 */
+	AActor* ImportAndProcessDatasmith(const FString& FilePath, const FString& PartNo);
+
+	/**
+	 * StaticMesh 액터만 유지하고 다른 자식 액터 제거
+	 * @param RootActor - 루트 액터
+	 */
+	void CleanupNonStaticMeshActors(AActor* RootActor);
 
 private:
 	/** 데이터스미스 씬 객체 */
@@ -101,4 +148,18 @@ private:
     
 	/** 투명 메터리얼을 사용하는 월드 액터 찾기 */
 	TArray<AActor*> FindTransparentActorsInWorld();
+
+	/**
+	 * 액터의 모든 하위 구조에서 StaticMeshActor 찾기
+	 * @param RootActor - 루트 액터
+	 * @param OutStaticMeshActors - 결과 StaticMeshActor 배열
+	 */
+	void FindAllStaticMeshActors(AActor* RootActor, TArray<AStaticMeshActor*>& OutStaticMeshActors);
+
+	/**
+	 * StaticMeshActor를 제외한 자식 액터들을 재귀적으로 제거
+	 * @param Actor - 처리할 액터
+	 * @param OutRemovedCount - 제거된 액터 수
+	 */
+	void RemoveNonStaticMeshChildren(AActor* Actor, int32& OutRemovedCount);
 };

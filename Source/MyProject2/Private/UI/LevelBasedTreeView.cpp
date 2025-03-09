@@ -2,24 +2,18 @@
 
 #include "UI/LevelBasedTreeView.h"
 
+#include "DatasmithSceneManager.h"
+#include "Engine/StaticMeshActor.h"
+#include "ServiceLocator.h"
+#include "SlateOptMacros.h"
 #include "UI/PartMetadataWidget.h"
 #include "UI/TreeViewUtils.h"
-#include "ServiceLocator.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SSearchBox.h"
 #include "Windows/WindowsPlatformApplicationMisc.h"
-#include "SlateOptMacros.h"
-
-#include "DatasmithImportFactory.h"
-#include "DatasmithImportOptions.h"
-#include "AssetImportTask.h"
-#include "AssetToolsModule.h"
-#include "DatasmithSceneManager.h"
-#include "IAssetTools.h"
-#include "Engine/StaticMeshActor.h"
 
 #if WITH_EDITOR
 #include "Editor.h"
@@ -961,259 +955,43 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     // 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
     FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
     
-    // 폴더 존재 확인 및 파일 찾기
-    if (!FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*XMLDir))
+    // FTreeViewUtils를 사용하여 일치하는 파일 찾기
+    FFileMatchResult FileResult = FTreeViewUtils::FindMatchingFileForPartNo(
+        XMLDir,                // 디렉토리 경로
+        TEXT("*.3dxml"),       // 파일 패턴
+        PartNo,                // 파트 번호
+        3                      // 파트 번호가 있는 인덱스 위치
+    );
+    
+    // 파일을 찾지 못한 경우 오류 메시지 표시
+    if (!FileResult.bFound)
     {
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 폴더가 존재하지 않습니다: ") + XMLDir));
-        return;
-    }
-    
-    // 폴더 내 모든 3DXML 파일 찾기
-    TArray<FString> FoundFiles;
-    IFileManager::Get().FindFiles(FoundFiles, *(XMLDir / TEXT("*.3dxml")), true, false);
-    
-    if (FoundFiles.Num() == 0)
-    {
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 폴더에 .3dxml 파일이 없습니다.")));
-        return;
-    }
-    
-    // 선택된 노드와 일치하는 파일 찾기
-    FString MatchingFilePath;
-    FString MatchingFileName;
-    
-    for (const FString& FileName : FoundFiles)
-    {
-        // 파일명만 추출 (경로 없이)
-        FString Filename = FPaths::GetBaseFilename(FileName);
-        
-        // 언더바로 문자열 분리
-        TArray<FString> Parts;
-        Filename.ParseIntoArray(Parts, TEXT("_"));
-        
-        // 언더바로 구분된 부분이 4개 이상인지 확인하고, 3번 인덱스가 파트 번호인지 확인
-        if (Parts.Num() >= 4 && Parts[3] == PartNo)
-        {
-            // 전체 경로 구성
-            MatchingFilePath = FPaths::Combine(XMLDir, FileName);
-            MatchingFileName = Filename;
-            break;
-        }
-    }
-    
-    // 일치하는 파일을 찾지 못한 경우
-    if (MatchingFilePath.IsEmpty())
-    {
-        FString MessageText = FString::Printf(TEXT("선택된 노드(%s)와 일치하는 3DXML 파일을 찾지 못했습니다."), *PartNo);
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(MessageText));
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FileResult.ErrorMessage));
         return;
     }
 
 #if WITH_EDITOR
-    // 파일 임포트를 위한 전체 경로 작업
-    FString FullFilePath = FPaths::ConvertRelativePathToFull(MatchingFilePath);
-    
-    UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 시작: %s"), *FullFilePath);
-    
-    // DatasmithSceneManager 인스턴스 생성
+    // DatasmithSceneManager를 사용하여 임포트 및 처리
     FDatasmithSceneManager SceneManager;
+    AActor* ResultActor = SceneManager.ImportAndProcessDatasmith(
+        FileResult.FilePath,   // 임포트할 파일 경로
+        PartNo                 // 파트 번호
+    );
     
-    // Datasmith 임포트 팩토리 및 옵션 생성/설정
-    UDatasmithImportFactory* DatasmithFactory = NewObject<UDatasmithImportFactory>();
-    if (!DatasmithFactory)
+    if (ResultActor)
     {
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("Datasmith 임포트 팩토리를 생성할 수 없습니다.")));
-        return;
-    }
-    
-    // 임포트 옵션 설정
-    UDatasmithImportOptions* ImportOptions = NewObject<UDatasmithImportOptions>();
-    if (ImportOptions)
-    {
-        // 기본 옵션 설정
-        ImportOptions->BaseOptions.SceneHandling = EDatasmithImportScene::CurrentLevel;
-        ImportOptions->BaseOptions.bIncludeGeometry = true;
-        ImportOptions->BaseOptions.bIncludeMaterial = true;
-        ImportOptions->BaseOptions.bIncludeLight = false;
-        ImportOptions->BaseOptions.bIncludeCamera = false;
-        ImportOptions->BaseOptions.bIncludeAnimation = false;
+        // 액터 선택
+        GEditor->SelectNone(true, true, false);
+        GEditor->SelectActor(ResultActor, true, true, true);
         
-        // 충돌 정책 설정
-        ImportOptions->MaterialConflictPolicy = EDatasmithImportAssetConflictPolicy::Update;
-        ImportOptions->TextureConflictPolicy = EDatasmithImportAssetConflictPolicy::Update;
-        ImportOptions->StaticMeshActorImportPolicy = EDatasmithImportActorPolicy::Update;
-        ImportOptions->LightImportPolicy = EDatasmithImportActorPolicy::Update;
-        ImportOptions->CameraImportPolicy = EDatasmithImportActorPolicy::Update;
-        ImportOptions->OtherActorImportPolicy = EDatasmithImportActorPolicy::Update;
-        ImportOptions->MaterialQuality = EDatasmithImportMaterialQuality::UseRealFresnelCurves;
-        
-        // 스태틱 메시 옵션 설정
-        ImportOptions->BaseOptions.StaticMeshOptions.MinLightmapResolution = EDatasmithImportLightmapMin::LIGHTMAP_64;
-        ImportOptions->BaseOptions.StaticMeshOptions.MaxLightmapResolution = EDatasmithImportLightmapMax::LIGHTMAP_1024;
-        ImportOptions->BaseOptions.StaticMeshOptions.bGenerateLightmapUVs = true;
-        ImportOptions->BaseOptions.StaticMeshOptions.bRemoveDegenerates = true;
-        
-        // 파일 정보 설정
-        ImportOptions->FileName = FPaths::GetCleanFilename(FullFilePath);
-        ImportOptions->FilePath = FullFilePath;
-        ImportOptions->SourceUri = FullFilePath;
+        // 임포트 성공 메시지 표시
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(
+            FString::Printf(TEXT("3DXML 파일 임포트 완료: %s\n액터 이름이 %s로 변경되었습니다."),
+                            *FileResult.FileName, *PartNo)));
     }
-    
-    // 임포트 태스크 생성
-    UAssetImportTask* ImportTask = NewObject<UAssetImportTask>();
-    ImportTask->Filename = FullFilePath;
-    ImportTask->DestinationPath = FString::Printf(TEXT("/Game/Datasmith/%s"), *PartNo);
-    ImportTask->Options = ImportOptions;
-    ImportTask->Factory = DatasmithFactory;
-    ImportTask->bSave = true;
-    ImportTask->bAutomated = true;
-    ImportTask->bAsync = false;  // 동기 임포트로 설정
-    
-    // 임포트 태스크 준비
-    FAssetToolsModule& AssetToolsModule = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools");
-    TArray<UAssetImportTask*> ImportTasks;
-    ImportTasks.Add(ImportTask);
-    
-    // 프로그레스 대화상자 표시
-    GWarn->BeginSlowTask(FText::FromString(TEXT("3DXML 파일 임포트 중...")), true);
-    
-    // 임포트 수행 (동기적으로 실행)
-    AssetToolsModule.Get().ImportAssetTasks(ImportTasks);
-    
-    // 프로그레스 대화상자 종료
-    GWarn->EndSlowTask();
-    
-    UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 완료: %s"), *FullFilePath);
-    
-    // 임포트된 DatasmithScene 객체 찾기
-    bool bSceneFound = false;
-    AActor* SceneActor = nullptr;
-    
-    const TArray<UObject*>& ImportedObjects = ImportTask->GetObjects();
-    for (UObject* Object : ImportedObjects)
+    else
     {
-        if (Object && Object->GetClass()->GetName().Contains(TEXT("DatasmithScene")))
-        {
-            // DatasmithScene 객체를 SceneManager에 설정
-            if (SceneManager.SetDatasmithScene(Object))
-            {
-                UE_LOG(LogTemp, Display, TEXT("DatasmithScene 객체 찾음: %s"), *Object->GetName());
-                bSceneFound = true;
-                
-                // 임포트된 DatasmithScene에서 DatasmithSceneActor 이름 가져오기
-                FString SceneActorName;
-                UClass* DatasmithSceneClass = Object->GetClass();
-                FProperty* SceneActorNameProperty = DatasmithSceneClass->FindPropertyByName(TEXT("Name"));
-                
-                if (SceneActorNameProperty)
-                {
-                    FStrProperty* StrProperty = CastField<FStrProperty>(SceneActorNameProperty);
-                    if (StrProperty)
-                    {
-                        SceneActorName = StrProperty->GetPropertyValue(SceneActorNameProperty->ContainerPtrToValuePtr<void>(Object));
-                    }
-                }
-                
-                // DatasmithSceneActor 찾기
-                UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
-                if (EditorWorld)
-                {
-                    // 1. 임포트된 DatasmithScene의 이름으로 찾기 (더 정확한 방법)
-                    if (!SceneActorName.IsEmpty())
-                    {
-                        for (TActorIterator<AActor> It(EditorWorld); It; ++It)
-                        {
-                            AActor* Actor = *It;
-                            if (Actor && Actor->GetName().Contains(SceneActorName))
-                            {
-                                SceneActor = Actor;
-                                UE_LOG(LogTemp, Display, TEXT("임포트된 DatasmithScene의 이름으로 SceneActor 찾음: %s"), *SceneActor->GetName());
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // 2. 이름으로 찾지 못한 경우 타입으로 찾기
-                    if (!SceneActor)
-                    {
-                        for (TActorIterator<AActor> It(EditorWorld); It; ++It)
-                        {
-                            AActor* Actor = *It;
-                            if (Actor && Actor->GetClass()->GetName().Contains(TEXT("DatasmithSceneActor")))
-                            {
-                                SceneActor = Actor;
-                                UE_LOG(LogTemp, Display, TEXT("타입으로 SceneActor 찾음: %s"), *SceneActor->GetName());
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                if (SceneActor)
-                {
-                    // SceneManager에 SceneActor 설정
-                    SceneManager.SetDatasmithSceneActor(SceneActor);
-                    
-                    // 자식 액터 찾기
-                    AActor* TargetActor = nullptr;
-                    TArray<AActor*> ChildActors;
-                    SceneActor->GetAttachedActors(ChildActors);
-                    
-                    if (ChildActors.Num() > 0)
-                    {
-                        TargetActor = ChildActors[0];
-                    }
-                    
-                    if (TargetActor)
-                    {
-                        // 액터 이름 변경
-                        FString SafeActorName = PartNo;
-                        SafeActorName.ReplaceInline(TEXT(" "), TEXT("_"));
-                        SafeActorName.ReplaceInline(TEXT("-"), TEXT("_"));
-                        
-                        TargetActor->Rename(*SafeActorName);
-                        TargetActor->SetActorLabel(*PartNo);
-                        
-                        // StaticMesh만 남기고 다른 자식 액터 제거
-                        CleanupNonStaticMeshActors(TargetActor);
-                        
-                        // 액터 선택
-                        GEditor->SelectNone(true, true, false);
-                        GEditor->SelectActor(TargetActor, true, true, true);
-                        
-                        UE_LOG(LogTemp, Display, TEXT("액터 이름 변경 및 선택 완료: %s (원래 이름: %s)"), 
-                               *SafeActorName, *PartNo);
-                               
-                        // DatasmithSceneActor 제거
-                        UE_LOG(LogTemp, Display, TEXT("DatasmithSceneActor 제거: %s"), *SceneActor->GetName());
-                        SceneActor->Destroy();
-                        
-                        // 임포트 성공 메시지 표시
-                        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(
-                            FString::Printf(TEXT("3DXML 파일 임포트 완료: %s\n액터 이름이 %s로 변경되었습니다."),
-                                            *MatchingFileName, *PartNo)));
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("DatasmithSceneActor에 자식 액터가 없습니다."));
-                        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("DatasmithSceneActor에 자식 액터가 없습니다.")));
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("임포트된 DatasmithSceneActor를 찾을 수 없습니다."));
-                    FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("임포트된 DatasmithSceneActor를 찾을 수 없습니다.")));
-                }
-                
-                break;
-            }
-        }
-    }
-    
-    if (!bSceneFound)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("임포트된 DatasmithScene 객체를 찾을 수 없습니다."));
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("임포트된 DatasmithScene 객체를 찾을 수 없습니다.")));
+        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 파일 임포트 실패")));
     }
 #else
     // 에디터가 아닌 환경에서는 임포트 불가

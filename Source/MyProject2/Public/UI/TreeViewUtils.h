@@ -9,6 +9,34 @@
 struct FPartTreeItem;
 
 /**
+ * 파일 일치 결과 구조체
+ * 파일 검색 결과를 저장합니다.
+ */
+struct FFileMatchResult
+{
+    /** 일치하는 파일의 전체 경로 */
+    FString FilePath;
+    
+    /** 일치하는 파일 이름 (경로 제외) */
+    FString FileName;
+    
+    /** 파일이 발견되었는지 여부 */
+    bool bFound;
+    
+    /** 오류 메시지 (발견되지 않은 경우) */
+    FString ErrorMessage;
+    
+    /** 기본 생성자 */
+    FFileMatchResult()
+        : FilePath("")
+        , FileName("")
+        , bFound(false)
+        , ErrorMessage("")
+    {
+    }
+};
+
+/**
  * 트리뷰 유틸리티 클래스
  * CSV 파일 처리 및 일반 유틸리티 함수들을 제공합니다.
  */
@@ -83,4 +111,26 @@ public:
 		TMap<int32, TArray<TSharedPtr<FPartTreeItem>>>& OutLevelToItemsMap,
 		int32& OutMaxLevel,
 		TArray<TSharedPtr<FPartTreeItem>>& OutRootItems);
+
+    /**
+     * 특정 디렉토리에서 PartNo와 일치하는 파일 찾기
+     * @param DirectoryPath - 검색할 디렉토리 경로
+     * @param FilePattern - 검색할 파일 패턴 (예: "*.3dxml")
+     * @param PartNo - 일치시킬 파트 번호
+     * @param PartIndexInFileName - 파일명을 언더바로 분리했을 때 파트번호가 위치한 인덱스
+     * @return 파일 검색 결과
+     */
+    static FFileMatchResult FindMatchingFileForPartNo(
+        const FString& DirectoryPath,
+        const FString& FilePattern,
+        const FString& PartNo,
+        int32 PartIndexInFileName = 3);
+	
+	/**
+	 * 언더바로 구분된 에셋 이름에서 파트 번호 추출
+	 * @param AssetName - 에셋 이름
+	 * @param PartIndex - 파트 번호가 있는 인덱스 위치 (기본값 3)
+	 * @return 파트 번호, 찾지 못한 경우 빈 문자열
+	 */
+	static FString ExtractPartNoFromAssetName(const FString& AssetName, int32 PartIndex = 3);
 };
