@@ -17,6 +17,7 @@
 FDatasmithSceneManager::FDatasmithSceneManager()
     : DatasmithScene(nullptr)
     , DatasmithSceneActor(nullptr)
+    , ImportSettings(FImportSettings())
 {
 }
 
@@ -904,3 +905,4 @@ void FDatasmithSceneManager::RemoveNonStaticMeshChildren(AActor* Actor, int32& O
         }
     }
 }
+

@@ -1,13 +1,34 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
-
+﻿// Source/MyProject2/Private/ImportSettings.cpp
 #include "ImportSettings.h"
 
+// 정적 멤버 초기화
+UImportSettingsManager* UImportSettingsManager::Instance = nullptr;
 
-ImportSettings::ImportSettings()
+UImportSettingsManager* UImportSettingsManager::Get()
 {
+	if (!Instance)
+	{
+		Instance = NewObject<UImportSettingsManager>();
+		Instance->AddToRoot(); // 가비지 컬렉션 방지
+        
+		// 설정 로드 (UObject config 시스템 사용)
+		if (Instance)
+		{
+			Instance->LoadConfig();
+		}
+	}
+    
+	return Instance;
 }
 
-ImportSettings::~ImportSettings()
+void UImportSettingsManager::SaveSettings(const FImportSettings& NewSettings)
 {
+	CurrentSettings = NewSettings;
+	SaveConfig();
+}
+
+void UImportSettingsManager::ResetToDefaults()
+{
+	CurrentSettings = FImportSettings();
+	SaveConfig();
 }

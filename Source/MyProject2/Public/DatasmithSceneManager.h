@@ -2,6 +2,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ImportSettings.h"
 #include "Materials/MaterialInterface.h"
 
 class UDatasmithImportOptions;
@@ -132,12 +133,18 @@ public:
 	 */
 	void RemoveTransparentMeshActors(AActor* RootActor);
 
+	void SetImportSettings(const FImportSettings& InSettings);
+	
+
 private:
 	/** 데이터스미스 씬 객체 */
 	TWeakObjectPtr<UObject> DatasmithScene;
 	
 	/** 데이터스미스 씬 액터 */
 	TWeakObjectPtr<AActor> DatasmithSceneActor;
+	
+	/** Import Settings**/
+	FImportSettings ImportSettings;
     
 	/** 투명도 검사 헬퍼 함수 */
 	bool HasTransparency(UMaterialInterface* Material);
