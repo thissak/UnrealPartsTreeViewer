@@ -89,14 +89,6 @@ public:
 	AActor* GetFirstChildActor();
 
 	/**
-	 * 액터의 이름을 변경하고 자식 액터를 정리
-	 * @param TargetActor - 처리할 타겟 액터
-	 * @param PartNo - 파트 번호 (이름에 사용)
-	 * @return 처리된 액터
-	 */
-	AActor* RenameAndCleanupActor(AActor* TargetActor, const FString& PartNo);
-
-	/**
 	 * Datasmith 임포트 옵션 생성
 	 * @param FilePath - 임포트할 파일 경로
 	 * @return 설정된 임포트 옵션
@@ -136,6 +128,8 @@ public:
 	void SetImportSettings(const FImportSettings& InSettings);
 
 	void ApplyImportSettingsToOptions(UDatasmithImportOptions* ImportOptions);
+
+	bool IsAlreadyImportedInLevel(const FString& PartNo) const;
 	
 
 private:

@@ -1,11 +1,11 @@
-﻿// Source/MyProject2/Private/UI/ImportSettingsDialog.cpp
-#include "UI/ImportSettingsDialog.h"
+﻿#include "UI/ImportSettingsDialog.h"
 #include "ImportSettings.h"
 #include "SlateOptMacros.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
+#include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -18,9 +18,12 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
     OnDialogCanceledDelegate = InArgs._OnDialogCanceled;
 
     // 재질 업데이트 정책 옵션 초기화
-    MaterialUpdateOptions.Add(MakeShareable(new FString(TEXT("항상 업데이트"))));
-    MaterialUpdateOptions.Add(MakeShareable(new FString(TEXT("기존 유지"))));
-    MaterialUpdateOptions.Add(MakeShareable(new FString(TEXT("항상 새로 생성"))));
+    MaterialUpdateOptions.Add(MakeShareable(new FString(TEXT("Always update"))));
+    MaterialUpdateOptions.Add(MakeShareable(new FString(TEXT("Keep existing"))));
+    MaterialUpdateOptions.Add(MakeShareable(new FString(TEXT("Always create new"))));
+
+    // 체크박스 위젯 배열 초기화
+    CheckboxWidgets.SetNum(4); // 4개의 체크박스 위젯을 위한 공간 확보
 
     ChildSlot
     [
@@ -36,8 +39,17 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
             .Padding(0, 0, 0, 10)
             [
                 SNew(STextBlock)
-                .Text(FText::FromString(TEXT("3DXML 임포트 설정")))
+                .Text(FText::FromString(TEXT("3DXML Import Settings")))
                 .Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
+            ]
+            
+            // 제목 아래 구분선 추가
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0, 0, 0, 10)
+            [
+                SNew(SSeparator)
+                .Thickness(1.0f)
             ]
 
             // 설정 항목들
@@ -50,12 +62,12 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
                 .FillWidth(1.0f)
                 [
                     SNew(STextBlock)
-                    .Text(FText::FromString(TEXT("투명 재질을 가진 메시 제거")))
+                    .Text(FText::FromString(TEXT("투명재질 메쉬 제거")))
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
                 [
-                    SNew(SCheckBox)
+                    SAssignNew(CheckboxWidgets[0], SCheckBox)
                     .IsChecked(CurrentSettings.bRemoveTransparentMeshes ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
                     .OnCheckStateChanged(this, &SImportSettingsDialog::OnCheckboxStateChanged, FName("bRemoveTransparentMeshes"))
                 ]
@@ -70,12 +82,12 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
                 .FillWidth(1.0f)
                 [
                     SNew(STextBlock)
-                    .Text(FText::FromString(TEXT("StaticMesh만 유지하고 나머지 정리")))
+                    .Text(FText::FromString(TEXT("메쉬만 남기고 액터 정리")))
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
                 [
-                    SNew(SCheckBox)
+                    SAssignNew(CheckboxWidgets[1], SCheckBox)
                     .IsChecked(CurrentSettings.bCleanupNonStaticMeshActors ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
                     .OnCheckStateChanged(this, &SImportSettingsDialog::OnCheckboxStateChanged, FName("bCleanupNonStaticMeshActors"))
                 ]
@@ -90,12 +102,12 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
                 .FillWidth(1.0f)
                 [
                     SNew(STextBlock)
-                    .Text(FText::FromString(TEXT("임포트 후 액터 선택")))
+                    .Text(FText::FromString(TEXT("import 후 액터 선택")))
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
                 [
-                    SNew(SCheckBox)
+                    SAssignNew(CheckboxWidgets[2], SCheckBox)
                     .IsChecked(CurrentSettings.bSelectActorAfterImport ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
                     .OnCheckStateChanged(this, &SImportSettingsDialog::OnCheckboxStateChanged, FName("bSelectActorAfterImport"))
                 ]
@@ -103,41 +115,21 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
 
             + SVerticalBox::Slot()
             .AutoHeight()
-            .Padding(0, 5)
+            .Padding(0, 10, 0, 5)
             [
                 SNew(SHorizontalBox)
                 + SHorizontalBox::Slot()
                 .FillWidth(1.0f)
                 [
                     SNew(STextBlock)
-                    .Text(FText::FromString(TEXT("LOD 생성")))
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                [
-                    SNew(SCheckBox)
-                    .IsChecked(CurrentSettings.bGenerateLODs ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-                    .OnCheckStateChanged(this, &SImportSettingsDialog::OnCheckboxStateChanged, FName("bGenerateLODs"))
-                ]
-            ]
-
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 5)
-            [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                [
-                    SNew(STextBlock)
-                    .Text(FText::FromString(TEXT("재질 업데이트 정책")))
+                    .Text(FText::FromString(TEXT("Material update policy")))
                 ]
                 + SHorizontalBox::Slot()
                 .AutoWidth()
                 .HAlign(HAlign_Right)
                 .VAlign(VAlign_Center)
                 [
-                    SNew(SComboBox<TSharedPtr<FString>>)
+                    SAssignNew(MaterialPolicyComboBox, SComboBox<TSharedPtr<FString>>)
                     .OptionsSource(&MaterialUpdateOptions)
                     .InitiallySelectedItem(MaterialUpdateOptions[CurrentSettings.MaterialUpdatePolicy])
                     .OnSelectionChanged(this, &SImportSettingsDialog::OnComboBoxSelectionChanged, FName("MaterialUpdatePolicy"))
@@ -152,16 +144,25 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
                             {
                                 return FText::FromString(*MaterialUpdateOptions[CurrentSettings.MaterialUpdatePolicy].Get());
                             }
-                            return FText::FromString(TEXT("항상 업데이트"));
+                            return FText::FromString(TEXT("Always update"));
                         })
                     ]
                 ]
+            ]
+            
+            // 두 번째 구분선 추가
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0, 10)
+            [
+                SNew(SSeparator)
+                .Thickness(1.0f)
             ]
 
             // 버튼 행
             + SVerticalBox::Slot()
             .AutoHeight()
-            .Padding(0, 20, 0, 0)
+            .Padding(0, 15, 0, 0)
             .HAlign(HAlign_Right)
             [
                 SNew(SHorizontalBox)
@@ -172,28 +173,58 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
                 .Padding(0, 0, 10, 0)
                 [
                     SNew(SButton)
-                    .Text(FText::FromString(TEXT("기본값으로 재설정")))
+                    .Text(FText::FromString(TEXT("Reset to defaults")))
                     .OnClicked(this, &SImportSettingsDialog::OnResetToDefaultsClicked)
                 ]
                 
-                // 취소 버튼
+                // 확인 버튼 (위치 변경됨)
                 + SHorizontalBox::Slot()
                 .AutoWidth()
-                .Padding(0, 0, 10, 0)
+                .Padding(10, 0, 0, 0)
                 [
                     SNew(SButton)
-                    .Text(FText::FromString(TEXT("취소")))
-                    .OnClicked(this, &SImportSettingsDialog::OnCancelClicked)
-                ]
-                
-                // 확인 버튼
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                [
-                    SNew(SButton)
-                    .Text(FText::FromString(TEXT("확인")))
+                    .Text(FText::FromString(TEXT("OK")))
                     .HAlign(HAlign_Center)
                     .OnClicked(this, &SImportSettingsDialog::OnConfirmClicked)
+                ]
+                
+                // 취소 버튼 (위치 변경됨)
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(10, 0, 0, 0)
+                [
+                    SNew(SButton)
+                    .Text(FText::FromString(TEXT("Cancel")))
+                    .OnClicked(this, &SImportSettingsDialog::OnCancelClicked)
+                ]
+            ]
+
+            // 첫 번째 구분선 추가
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0, 10)
+            [
+                SNew(SSeparator)
+                .Thickness(1.0f)
+            ]
+
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(0, 5)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString(TEXT("Don't show this dialog again")))
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                [
+                    SAssignNew(CheckboxWidgets[3], SCheckBox)
+                    .IsChecked(CurrentSettings.bDontShowDialogAgain ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+                    .OnCheckStateChanged(this, &SImportSettingsDialog::OnCheckboxStateChanged, FName("bDontShowDialogAgain"))
                 ]
             ]
         ]
@@ -225,7 +256,33 @@ FReply SImportSettingsDialog::OnResetToDefaultsClicked()
     // 기본 설정으로 초기화
     CurrentSettings = FImportSettings();
     
-    // 위젯 갱신
+    // 체크박스 UI 갱신
+    for (int32 i = 0; i < CheckboxWidgets.Num(); ++i)
+    {
+        if (CheckboxWidgets[i].IsValid())
+        {
+            bool bIsChecked = false;
+            
+            // 각 체크박스에 해당하는 설정값 가져오기
+            switch (i)
+            {
+                case 0: bIsChecked = CurrentSettings.bRemoveTransparentMeshes; break;
+                case 1: bIsChecked = CurrentSettings.bCleanupNonStaticMeshActors; break;
+                case 2: bIsChecked = CurrentSettings.bSelectActorAfterImport; break;
+                case 3: bIsChecked = CurrentSettings.bDontShowDialogAgain; break;
+            }
+            
+            // 체크박스 상태 갱신
+            CheckboxWidgets[i].Pin()->SetIsChecked(bIsChecked ? ECheckBoxState::Checked : ECheckBoxState::Unchecked);
+        }
+    }
+    
+    // 콤보박스 UI 갱신
+    if (MaterialPolicyComboBox.IsValid())
+    {
+        MaterialPolicyComboBox.Pin()->SetSelectedItem(MaterialUpdateOptions[CurrentSettings.MaterialUpdatePolicy]);
+    }
+    
     return FReply::Handled();
 }
 
@@ -246,9 +303,9 @@ void SImportSettingsDialog::OnCheckboxStateChanged(ECheckBoxState NewState, FNam
     {
         CurrentSettings.bSelectActorAfterImport = bChecked;
     }
-    else if (PropertyName == "bGenerateLODs")
+    else if (PropertyName == "bDontShowDialogAgain")
     {
-        CurrentSettings.bGenerateLODs = bChecked;
+        CurrentSettings.bDontShowDialogAgain = bChecked;
     }
 }
 

@@ -873,30 +873,40 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     FImportSettings CurrentSettings = UImportSettingsManager::Get()->GetSettings();
     FImportSettings NewSettings = CurrentSettings;
     
-    // 임포트 설정 대화상자 표시
-    bool bConfirmed = ShowImportSettingsDialog(
-        FSlateApplication::Get().GetActiveTopLevelWindow(),
-        FText::FromString(TEXT("3DXML 임포트 설정")),
-        CurrentSettings,
-        NewSettings
-    );
+    // 설정창 표시 여부 확인 (직접 속성 확인)
+    bool bShowDialog = !CurrentSettings.bDontShowDialogAgain;
+    bool bConfirmed = true;
     
-    if (!bConfirmed)
+    // 설정창 표시 여부 확인
+    if (bShowDialog)
     {
-        // 사용자가 취소한 경우
-        return;
+        // 임포트 설정 대화상자 표시
+        bConfirmed = ShowImportSettingsDialog(
+            FSlateApplication::Get().GetActiveTopLevelWindow(),
+            FText::FromString(TEXT("3DXML 임포트 설정")),
+            CurrentSettings,
+            NewSettings
+        );
+        
+        if (!bConfirmed)
+        {
+            // 사용자가 취소한 경우
+            return;
+        }
+        
+        // 새 설정 저장
+        UImportSettingsManager::Get()->SaveSettings(NewSettings);
     }
-    
-    // 새 설정 저장
-    UImportSettingsManager::Get()->SaveSettings(NewSettings);
-    
+
     // 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
     FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
     
     int32 SuccessCount = 0;
     int32 FailCount = 0;
+    int32 AlreadyImportedCount = 0;
     TArray<FString> FailedParts;
     TArray<FString> ImportedParts;
+    TArray<FString> AlreadyImportedParts;
     
     // 전체 항목 수 저장
     int32 TotalItems = SelectedItems.Num();
@@ -929,6 +939,15 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         
         // ImportSettings 적용
         SceneManager.SetImportSettings(NewSettings);
+
+        // 이미 임포트된 노드인지 확인
+        if (SceneManager.IsAlreadyImportedInLevel(PartNo))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("이미 임포트된 액터가 있음: %s"), *PartNo);
+            AlreadyImportedCount++;
+            AlreadyImportedParts.Add(PartNo);
+            continue; // 이미 임포트된 경우 건너뛰기
+        }
         
         // 현재 인덱스(1부터 시작)와 전체 갯수를 전달하여 진행 상황 표시
         AActor* ResultActor = SceneManager.ImportAndProcessDatasmith(
@@ -983,6 +1002,29 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         }
     }
     
+    // 이미 임포트된 노드가 있는 경우 알림
+    if (AlreadyImportedCount > 0)
+    {
+        FString SkippedMessage;
+    
+        if (AlreadyImportedCount == 1)
+        {
+            // 단일 노드인 경우
+            SkippedMessage = FString::Printf(TEXT("이미 임포트된 노드가 있습니다: %s"), 
+                *AlreadyImportedParts[0]);
+        }
+        else
+        {
+            // 여러 노드인 경우
+            SkippedMessage = FString::Printf(TEXT("이미 임포트된 %d개 노드는 건너뜁니다: %s"), 
+                AlreadyImportedCount, *FString::Join(AlreadyImportedParts, TEXT(", ")));
+        }
+    
+        FNotificationInfo Info(FText::FromString(SkippedMessage));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
+    }
+    
     // 처리 결과 알림 표시
     if (SuccessCount > 0 && FailCount == 0)
     {
@@ -1019,7 +1061,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
             NotificationItem->SetCompletionState(SNotificationItem::CS_Fail);
         }
     }
-    else if (SuccessCount == 0)
+    else if (SuccessCount == 0 && FailCount > 0)
     {
         FString ResultMessage = TEXT("모든 3DXML 파일 임포트에 실패했습니다.");
         

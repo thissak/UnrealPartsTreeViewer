@@ -59,6 +59,12 @@ private:
 
     /** 재질 업데이트 정책 옵션 */
     TArray<TSharedPtr<FString>> MaterialUpdateOptions;
+    
+    /** 체크박스 위젯 레퍼런스 */
+    TArray<TWeakPtr<SCheckBox>> CheckboxWidgets;
+    
+    /** 콤보박스 위젯 레퍼런스 */
+    TWeakPtr<SComboBox<TSharedPtr<FString>>> MaterialPolicyComboBox;
 };
 
 /**

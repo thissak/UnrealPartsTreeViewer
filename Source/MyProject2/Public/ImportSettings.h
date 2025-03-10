@@ -25,9 +25,9 @@ struct FImportSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Import Settings")
 	bool bSelectActorAfterImport = true;
 
-	/** 임포트된 메시에 LOD 생성 여부 */
+	/** 다시는 설정창 표시하지 않음 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Import Settings")
-	bool bGenerateLODs = false;
+	bool bDontShowDialogAgain = false;
 
 	/** 재질 업데이트 방식 
 	 * 0 = 항상 업데이트, 1 = 기존 유지, 2 = 항상 새로 생성 */
