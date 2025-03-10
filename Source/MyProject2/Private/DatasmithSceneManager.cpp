@@ -550,30 +550,6 @@ AActor* FDatasmithSceneManager::FindDatasmithSceneActorFromImport(UObject* InDat
     return SceneActor;
 }
 
-AActor* FDatasmithSceneManager::RenameAndCleanupActor(AActor* TargetActor, const FString& PartNo)
-{
-    if (!TargetActor)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("유효한 타겟 액터가 아닙니다."));
-        return nullptr;
-    }
-    
-    // 액터 이름 변경
-    FString SafeActorName = PartNo;
-    SafeActorName.ReplaceInline(TEXT(" "), TEXT("_"));
-    SafeActorName.ReplaceInline(TEXT("-"), TEXT("_"));
-    
-    TargetActor->Rename(*SafeActorName);
-    TargetActor->SetActorLabel(*PartNo);
-    
-    // StaticMesh만 남기고 다른 자식 액터 제거
-    CleanupNonStaticMeshActors(TargetActor);
-    
-    UE_LOG(LogTemp, Display, TEXT("액터 이름 변경 및 정리 완료: %s (원래 이름: %s)"), 
-           *SafeActorName, *PartNo);
-           
-    return TargetActor;
-}
 
 UDatasmithImportOptions* FDatasmithSceneManager::CreateImportOptions(const FString& FilePath)
 {
@@ -765,8 +741,15 @@ AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePat
                     return nullptr;
                 }
                 
-                // 액터 이름 변경 및 정리
-                TargetActor = RenameAndCleanupActor(TargetActor, PartNo);
+                // 액터 이름 변경
+                FString SafeActorName = PartNo;
+                SafeActorName.ReplaceInline(TEXT(" "), TEXT("_"));
+                SafeActorName.ReplaceInline(TEXT("-"), TEXT("_"));
+                
+                TargetActor->Rename(*SafeActorName);
+                TargetActor->SetActorLabel(*PartNo);
+                
+                UE_LOG(LogTemp, Display, TEXT("액터 이름 변경 완료: %s"), *SafeActorName);
 
                 // ImportSettings 적용 - 투명 메시 제거 옵션
                 if (Settings.bRemoveTransparentMeshes)
@@ -956,3 +939,38 @@ void FDatasmithSceneManager::RemoveNonStaticMeshChildren(AActor* Actor, int32& O
     }
 }
 
+// DatasmithSceneManager에 함수 추가
+bool FDatasmithSceneManager::IsAlreadyImportedInLevel(const FString& PartNo) const
+{
+    // 1. 매니저에 등록되어 있는지 확인
+    bool bRegisteredInManager = FImportedNodeManager::Get().IsNodeImported(PartNo);
+    
+    // 2. 레벨에 실제로 존재하는지 태그로 검색하여 확인
+    bool bExistsInLevel = false;
+    
+#if WITH_EDITOR
+    if (GEditor)
+    {
+        UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+        if (EditorWorld)
+        {
+            // ImportedTag와 파트번호 태그를 모두 가진 액터 검색
+            FName ImportedTag = FImportedNodeManager::ImportedTag; // "Imported3DXML"
+            FName PartTag = FName(*FString::Printf(TEXT("ImportedPart_%s"), *PartNo));
+            
+            for (TActorIterator<AActor> It(EditorWorld); It; ++It)
+            {
+                AActor* Actor = *It;
+                if (Actor && Actor->ActorHasTag(ImportedTag) && Actor->ActorHasTag(PartTag))
+                {
+                    bExistsInLevel = true;
+                    break;
+                }
+            }
+        }
+    }
+#endif
+    
+    // 둘 중 하나라도 true면 임포트된 것으로 간주
+    return bRegisteredInManager || bExistsInLevel;
+}
