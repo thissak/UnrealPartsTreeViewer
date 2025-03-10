@@ -615,62 +615,80 @@ UDatasmithImportOptions* FDatasmithSceneManager::CreateImportOptions(const FStri
     return ImportOptions;
 }
 
+// Source/MyProject2/Private/DatasmithSceneManager.cpp 파일의 
+// ImportDatasmithFile 함수 수정
+
 TArray<UObject*> FDatasmithSceneManager::ImportDatasmithFile(const FString& FilePath, const FString& DestinationPath)
 {
-    TArray<UObject*> ImportedObjects;
+	TArray<UObject*> ImportedObjects;
     
-    // Datasmith 임포트 팩토리 생성
-    UDatasmithImportFactory* DatasmithFactory = NewObject<UDatasmithImportFactory>();
-    if (!DatasmithFactory)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Datasmith 임포트 팩토리를 생성할 수 없습니다."));
-        return ImportedObjects;
-    }
+	// Datasmith 임포트 팩토리 생성
+	UDatasmithImportFactory* DatasmithFactory = NewObject<UDatasmithImportFactory>();
+	if (!DatasmithFactory)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Datasmith 임포트 팩토리를 생성할 수 없습니다."));
+		return ImportedObjects;
+	}
     
-    // 임포트 옵션 생성
-    UDatasmithImportOptions* ImportOptions = CreateImportOptions(FilePath);
-    if (!ImportOptions)
-    {
-        return ImportedObjects;
-    }
+	// 임포트 옵션 생성
+	UDatasmithImportOptions* ImportOptions = CreateImportOptions(FilePath);
+	if (!ImportOptions)
+	{
+		return ImportedObjects;
+	}
     
-    // 임포트 태스크 생성
-    UAssetImportTask* ImportTask = NewObject<UAssetImportTask>();
-    ImportTask->Filename = FPaths::ConvertRelativePathToFull(FilePath);
-    ImportTask->DestinationPath = DestinationPath;
-    ImportTask->Options = ImportOptions;
-    ImportTask->Factory = DatasmithFactory;
-    ImportTask->bSave = true;
-    ImportTask->bAutomated = true;
-    ImportTask->bAsync = false;  // 동기 임포트로 설정
+	// 임포트 태스크 생성
+	UAssetImportTask* ImportTask = NewObject<UAssetImportTask>();
+	ImportTask->Filename = FPaths::ConvertRelativePathToFull(FilePath);
+	ImportTask->DestinationPath = DestinationPath;
+	ImportTask->Options = ImportOptions;
+	ImportTask->Factory = DatasmithFactory;
+	ImportTask->bSave = true;
+	ImportTask->bAutomated = true;
+	ImportTask->bAsync = false;  // 동기 임포트로 설정
     
-    // 임포트 태스크 준비
-    FAssetToolsModule& AssetToolsModule = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools");
-    TArray<UAssetImportTask*> ImportTasks;
-    ImportTasks.Add(ImportTask);
+	// 임포트 태스크 준비
+	FAssetToolsModule& AssetToolsModule = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools");
+	TArray<UAssetImportTask*> ImportTasks;
+	ImportTasks.Add(ImportTask);
     
-    // 프로그레스 대화상자 표시
-    GWarn->BeginSlowTask(FText::FromString(TEXT("3DXML 파일 임포트 중...")), true);
+	// 프로그레스 대화상자는 상위 함수인 ImportAndProcessDatasmith에서 처리
     
-    // 임포트 수행 (동기적으로 실행)
-    AssetToolsModule.Get().ImportAssetTasks(ImportTasks);
+	// 임포트 수행 (동기적으로 실행)
+	AssetToolsModule.Get().ImportAssetTasks(ImportTasks);
     
-    // 프로그레스 대화상자 종료
-    GWarn->EndSlowTask();
+	UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 완료: %s"), *FilePath);
     
-    UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 완료: %s"), *FilePath);
+	// 임포트된 객체 반환
+	ImportedObjects = ImportTask->GetObjects();
     
-    // 임포트된 객체 반환
-    ImportedObjects = ImportTask->GetObjects();
-    
-    return ImportedObjects;
+	return ImportedObjects;
 }
 
-AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePath, const FString& PartNo)
+// Source/MyProject2/Private/DatasmithSceneManager.cpp 파일의 
+// ImportAndProcessDatasmith 함수 수정
+
+AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePath, const FString& PartNo, int32 CurrentIndex, int32 TotalCount)
 {
     // 파일 임포트
     FString DestinationPath = FString::Printf(TEXT("/Game/Datasmith/%s"), *PartNo);
+    
+    // 진행 메시지 표시 (현재/전체)
+    FString ProgressMessage;
+    if (TotalCount > 1) {
+        ProgressMessage = FString::Printf(TEXT("3DXML 파일 임포트 중... (%d/%d)"), CurrentIndex, TotalCount);
+    } else {
+        ProgressMessage = TEXT("3DXML 파일 임포트 중...");
+    }
+    
+    // 프로그레스 대화상자 표시 - 현재/전체 노드 정보를 포함
+    GWarn->BeginSlowTask(FText::FromString(ProgressMessage), true);
+    
+    // 임포트 수행
     TArray<UObject*> ImportedObjects = ImportDatasmithFile(FilePath, DestinationPath);
+    
+    // 프로그레스 대화상자 종료
+    GWarn->EndSlowTask();
     
     // DatasmithScene 객체 찾기
     for (UObject* Object : ImportedObjects)
@@ -709,11 +727,11 @@ AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePat
                 // 액터 이름 변경 및 정리
                 TargetActor = RenameAndCleanupActor(TargetActor, PartNo);
 
-            	// 투명도가 있는 메시 찾기 및 제거
-            	RemoveTransparentMeshActors(TargetActor);
-            	
-            	// 임포트된 노드 관리자에 등록
-            	FImportedNodeManager::Get().RegisterImportedNode(PartNo, TargetActor);
+                // 투명도가 있는 메시 찾기 및 제거
+                RemoveTransparentMeshActors(TargetActor);
+                
+                // 임포트된 노드 관리자에 등록
+                FImportedNodeManager::Get().RegisterImportedNode(PartNo, TargetActor);
                 
                 // DatasmithSceneActor 제거
                 UE_LOG(LogTemp, Display, TEXT("DatasmithSceneActor 제거: %s"), *SceneActor->GetName());

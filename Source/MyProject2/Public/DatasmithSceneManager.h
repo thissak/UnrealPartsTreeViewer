@@ -114,9 +114,11 @@ public:
 	 * 3DXML 파일 임포트 및 처리 통합 함수
 	 * @param FilePath - 임포트할 파일 경로
 	 * @param PartNo - 파트 번호
+	 * @param CurrentIndex - 현재 처리 중인 노드 인덱스 (기본값 1)
+	 * @param TotalCount - 총 처리할 노드 수 (기본값 1)
 	 * @return 처리된 결과 액터
 	 */
-	AActor* ImportAndProcessDatasmith(const FString& FilePath, const FString& PartNo);
+	AActor* ImportAndProcessDatasmith(const FString& FilePath, const FString& PartNo, int32 CurrentIndex = 1, int32 TotalCount = 1);
 
 	/**
 	 * StaticMesh 액터만 유지하고 다른 자식 액터 제거

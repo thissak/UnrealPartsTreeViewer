@@ -851,6 +851,9 @@ void SLevelBasedTreeView::ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item
 }
 
 // 3DXML 파일 임포트 함수
+// Source/MyProject2/Private/UI/LevelBasedTreeView.cpp 파일의 
+// ImportXMLToSelectedNode 함수 수정
+
 void SLevelBasedTreeView::ImportXMLToSelectedNode()
 {
     // 선택된 노드 확인
@@ -871,9 +874,13 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     TArray<FString> FailedParts;
     TArray<FString> ImportedParts;
     
+    // 전체 항목 수 저장
+    int32 TotalItems = SelectedItems.Num();
+    
     // 선택된 모든 항목에 대해 처리
-    for (TSharedPtr<FPartTreeItem> SelectedItem : SelectedItems)
+    for (int32 ItemIndex = 0; ItemIndex < SelectedItems.Num(); ItemIndex++)
     {
+        TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[ItemIndex];
         FString PartNo = SelectedItem->PartNo;
         
         // FTreeViewUtils를 사용하여 일치하는 파일 찾기
@@ -895,9 +902,13 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
 #if WITH_EDITOR
         // DatasmithSceneManager를 사용하여 임포트 및 처리
         FDatasmithSceneManager SceneManager;
+        
+        // 현재 인덱스(1부터 시작)와 전체 갯수를 전달하여 진행 상황 표시
         AActor* ResultActor = SceneManager.ImportAndProcessDatasmith(
-            FileResult.FilePath,   // 임포트할 파일 경로
-            PartNo                 // 파트 번호
+            FileResult.FilePath,     // 임포트할 파일 경로
+            PartNo,                  // 파트 번호
+            ItemIndex + 1,           // 현재 처리 중인 인덱스(1부터 시작)
+            TotalItems               // 전체 항목 수
         );
         
         if (ResultActor)
