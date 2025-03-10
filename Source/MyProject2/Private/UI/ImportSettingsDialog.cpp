@@ -110,26 +110,6 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
                 .FillWidth(1.0f)
                 [
                     SNew(STextBlock)
-                    .Text(FText::FromString(TEXT("충돌 생성")))
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                [
-                    SNew(SCheckBox)
-                    .IsChecked(CurrentSettings.bGenerateCollision ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-                    .OnCheckStateChanged(this, &SImportSettingsDialog::OnCheckboxStateChanged, FName("bGenerateCollision"))
-                ]
-            ]
-
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 5)
-            [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                [
-                    SNew(STextBlock)
                     .Text(FText::FromString(TEXT("LOD 생성")))
                 ]
                 + SHorizontalBox::Slot()
@@ -265,10 +245,6 @@ void SImportSettingsDialog::OnCheckboxStateChanged(ECheckBoxState NewState, FNam
     else if (PropertyName == "bSelectActorAfterImport")
     {
         CurrentSettings.bSelectActorAfterImport = bChecked;
-    }
-    else if (PropertyName == "bGenerateCollision")
-    {
-        CurrentSettings.bGenerateCollision = bChecked;
     }
     else if (PropertyName == "bGenerateLODs")
     {

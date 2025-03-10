@@ -621,49 +621,86 @@ UDatasmithImportOptions* FDatasmithSceneManager::CreateImportOptions(const FStri
 
 TArray<UObject*> FDatasmithSceneManager::ImportDatasmithFile(const FString& FilePath, const FString& DestinationPath)
 {
-	TArray<UObject*> ImportedObjects;
+    TArray<UObject*> ImportedObjects;
     
-	// Datasmith 임포트 팩토리 생성
-	UDatasmithImportFactory* DatasmithFactory = NewObject<UDatasmithImportFactory>();
-	if (!DatasmithFactory)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Datasmith 임포트 팩토리를 생성할 수 없습니다."));
-		return ImportedObjects;
-	}
+    // Datasmith 임포트 팩토리 생성
+    UDatasmithImportFactory* DatasmithFactory = NewObject<UDatasmithImportFactory>();
+    if (!DatasmithFactory)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Datasmith 임포트 팩토리를 생성할 수 없습니다."));
+        return ImportedObjects;
+    }
     
-	// 임포트 옵션 생성
-	UDatasmithImportOptions* ImportOptions = CreateImportOptions(FilePath);
-	if (!ImportOptions)
-	{
-		return ImportedObjects;
-	}
+    // 임포트 옵션 생성 및 ImportSettings 적용
+    UDatasmithImportOptions* ImportOptions = CreateImportOptions(FilePath);
+    if (!ImportOptions)
+    {
+        return ImportedObjects;
+    }
     
-	// 임포트 태스크 생성
-	UAssetImportTask* ImportTask = NewObject<UAssetImportTask>();
-	ImportTask->Filename = FPaths::ConvertRelativePathToFull(FilePath);
-	ImportTask->DestinationPath = DestinationPath;
-	ImportTask->Options = ImportOptions;
-	ImportTask->Factory = DatasmithFactory;
-	ImportTask->bSave = true;
-	ImportTask->bAutomated = true;
-	ImportTask->bAsync = false;  // 동기 임포트로 설정
+    // 사용자 설정 적용
+    ApplyImportSettingsToOptions(ImportOptions);
     
-	// 임포트 태스크 준비
-	FAssetToolsModule& AssetToolsModule = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools");
-	TArray<UAssetImportTask*> ImportTasks;
-	ImportTasks.Add(ImportTask);
+    // 임포트 태스크 생성
+    UAssetImportTask* ImportTask = NewObject<UAssetImportTask>();
+    ImportTask->Filename = FPaths::ConvertRelativePathToFull(FilePath);
+    ImportTask->DestinationPath = DestinationPath;
+    ImportTask->Options = ImportOptions;
+    ImportTask->Factory = DatasmithFactory;
+    ImportTask->bSave = true;
+    ImportTask->bAutomated = true;
+    ImportTask->bAsync = false;  // 동기 임포트로 설정
     
-	// 프로그레스 대화상자는 상위 함수인 ImportAndProcessDatasmith에서 처리
+    // 임포트 태스크 준비
+    FAssetToolsModule& AssetToolsModule = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools");
+    TArray<UAssetImportTask*> ImportTasks;
+    ImportTasks.Add(ImportTask);
     
-	// 임포트 수행 (동기적으로 실행)
-	AssetToolsModule.Get().ImportAssetTasks(ImportTasks);
+    // 임포트 수행 (동기적으로 실행)
+    AssetToolsModule.Get().ImportAssetTasks(ImportTasks);
     
-	UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 완료: %s"), *FilePath);
+    UE_LOG(LogTemp, Display, TEXT("3DXML 파일 임포트 완료: %s"), *FilePath);
     
-	// 임포트된 객체 반환
-	ImportedObjects = ImportTask->GetObjects();
+    // 임포트된 객체 반환
+    ImportedObjects = ImportTask->GetObjects();
     
-	return ImportedObjects;
+    return ImportedObjects;
+}
+
+// ImportSettings 설정 함수 구현
+void FDatasmithSceneManager::SetImportSettings(const FImportSettings& InSettings)
+{
+    ImportSettings = InSettings;
+}
+
+// ImportSettings를 ImportOptions에 적용하는 함수 추가
+void FDatasmithSceneManager::ApplyImportSettingsToOptions(UDatasmithImportOptions* ImportOptions)
+{
+    if (!ImportOptions)
+        return;
+    
+    // 라이트맵 UV 생성은 LOD와 직접적인 관련이 없지만, 기본적으로 활성화
+    ImportOptions->BaseOptions.StaticMeshOptions.bGenerateLightmapUVs = true;
+    
+    // 재질 업데이트 정책 적용
+    switch (ImportSettings.MaterialUpdatePolicy)
+    {
+    case 0: // 항상 업데이트
+        ImportOptions->MaterialConflictPolicy = EDatasmithImportAssetConflictPolicy::Update;
+        break;
+    case 1: // 기존 유지
+        ImportOptions->MaterialConflictPolicy = EDatasmithImportAssetConflictPolicy::Use;
+        break;
+    case 2: // 항상 새로 생성
+        ImportOptions->MaterialConflictPolicy = EDatasmithImportAssetConflictPolicy::Replace;
+        break;
+    default:
+        ImportOptions->MaterialConflictPolicy = EDatasmithImportAssetConflictPolicy::Update;
+        break;
+    }
+    
+    // 텍스처 업데이트 정책도 동일하게 적용
+    ImportOptions->TextureConflictPolicy = ImportOptions->MaterialConflictPolicy;
 }
 
 // Source/MyProject2/Private/DatasmithSceneManager.cpp 파일의 
@@ -671,6 +708,9 @@ TArray<UObject*> FDatasmithSceneManager::ImportDatasmithFile(const FString& File
 
 AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePath, const FString& PartNo, int32 CurrentIndex, int32 TotalCount)
 {
+    // ImportSettings 가져오기
+    FImportSettings Settings = ImportSettings;
+    
     // 파일 임포트
     FString DestinationPath = FString::Printf(TEXT("/Game/Datasmith/%s"), *PartNo);
     
@@ -728,8 +768,17 @@ AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePat
                 // 액터 이름 변경 및 정리
                 TargetActor = RenameAndCleanupActor(TargetActor, PartNo);
 
-                // 투명도가 있는 메시 찾기 및 제거
-                RemoveTransparentMeshActors(TargetActor);
+                // ImportSettings 적용 - 투명 메시 제거 옵션
+                if (Settings.bRemoveTransparentMeshes)
+                {
+                    RemoveTransparentMeshActors(TargetActor);
+                }
+                
+                // ImportSettings 적용 - StaticMesh만 유지 옵션
+                if (Settings.bCleanupNonStaticMeshActors)
+                {
+                    CleanupNonStaticMeshActors(TargetActor);
+                }
                 
                 // 임포트된 노드 관리자에 등록
                 FImportedNodeManager::Get().RegisterImportedNode(PartNo, TargetActor);
@@ -746,6 +795,7 @@ AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePat
     UE_LOG(LogTemp, Warning, TEXT("임포트된 DatasmithScene 객체를 찾을 수 없습니다."));
     return nullptr;
 }
+
 
 void FDatasmithSceneManager::RemoveTransparentMeshActors(AActor* RootActor)
 {

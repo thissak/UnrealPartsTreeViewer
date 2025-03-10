@@ -7,6 +7,7 @@
 #include "ServiceLocator.h"
 #include "SlateOptMacros.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "UI/ImportSettingsDialog.h"
 #include "UI/PartMetadataWidget.h"
 #include "UI/TreeViewUtils.h"
 #include "Widgets/Views/SHeaderRow.h"
@@ -854,6 +855,8 @@ void SLevelBasedTreeView::ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item
 // Source/MyProject2/Private/UI/LevelBasedTreeView.cpp 파일의 
 // ImportXMLToSelectedNode 함수 수정
 
+// LevelBasedTreeView.cpp의 ImportXMLToSelectedNode 함수 수정
+
 void SLevelBasedTreeView::ImportXMLToSelectedNode()
 {
     // 선택된 노드 확인
@@ -865,6 +868,27 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         FSlateNotificationManager::Get().AddNotification(Info);
         return;
     }
+    
+    // 현재 저장된 임포트 설정 가져오기
+    FImportSettings CurrentSettings = UImportSettingsManager::Get()->GetSettings();
+    FImportSettings NewSettings = CurrentSettings;
+    
+    // 임포트 설정 대화상자 표시
+    bool bConfirmed = ShowImportSettingsDialog(
+        FSlateApplication::Get().GetActiveTopLevelWindow(),
+        FText::FromString(TEXT("3DXML 임포트 설정")),
+        CurrentSettings,
+        NewSettings
+    );
+    
+    if (!bConfirmed)
+    {
+        // 사용자가 취소한 경우
+        return;
+    }
+    
+    // 새 설정 저장
+    UImportSettingsManager::Get()->SaveSettings(NewSettings);
     
     // 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
     FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
@@ -903,6 +927,9 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         // DatasmithSceneManager를 사용하여 임포트 및 처리
         FDatasmithSceneManager SceneManager;
         
+        // ImportSettings 적용
+        SceneManager.SetImportSettings(NewSettings);
+        
         // 현재 인덱스(1부터 시작)와 전체 갯수를 전달하여 진행 상황 표시
         AActor* ResultActor = SceneManager.ImportAndProcessDatasmith(
             FileResult.FilePath,     // 임포트할 파일 경로
@@ -916,8 +943,8 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
             SuccessCount++;
             ImportedParts.Add(PartNo);
             
-            // 마지막으로 처리된 액터 선택
-            if (SelectedItem == SelectedItems.Last())
+            // 설정에 따라 마지막으로 처리된 액터 선택
+            if (NewSettings.bSelectActorAfterImport && SelectedItem == SelectedItems.Last())
             {
                 GEditor->SelectNone(true, true, false);
                 GEditor->SelectActor(ResultActor, true, true, true);
@@ -944,7 +971,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         TreeView->RebuildList();
         
         // 임포트된 마지막 항목을 화면에 표시
-        if (ImportedParts.Num() > 0)
+        if (ImportedParts.Num() > 0 && NewSettings.bSelectActorAfterImport)
         {
             FString LastImportedPart = ImportedParts.Last();
             TSharedPtr<FPartTreeItem>* ItemPtr = PartNoToItemMap.Find(LastImportedPart);

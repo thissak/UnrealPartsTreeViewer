@@ -25,10 +25,6 @@ struct FImportSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Import Settings")
 	bool bSelectActorAfterImport = true;
 
-	/** 임포트된 메시에 충돌 생성 여부 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Import Settings")
-	bool bGenerateCollision = true;
-
 	/** 임포트된 메시에 LOD 생성 여부 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Import Settings")
 	bool bGenerateLODs = false;

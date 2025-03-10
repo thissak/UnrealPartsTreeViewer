@@ -134,6 +134,8 @@ public:
 	void RemoveTransparentMeshActors(AActor* RootActor);
 
 	void SetImportSettings(const FImportSettings& InSettings);
+
+	void ApplyImportSettingsToOptions(UDatasmithImportOptions* ImportOptions);
 	
 
 private:
