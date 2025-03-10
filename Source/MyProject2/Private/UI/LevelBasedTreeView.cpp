@@ -5,12 +5,14 @@
 #include "DatasmithSceneManager.h"
 #include "ServiceLocator.h"
 #include "SlateOptMacros.h"
+#include "Framework/Notifications/NotificationManager.h"
 #include "UI/PartMetadataWidget.h"
 #include "UI/TreeViewUtils.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SSearchBox.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "Windows/WindowsPlatformApplicationMisc.h"
 
 #if WITH_EDITOR
@@ -868,21 +870,50 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         PartNo                 // 파트 번호
     );
     
-    if (ResultActor)
-    {
-        // 액터 선택
-        GEditor->SelectNone(true, true, false);
-        GEditor->SelectActor(ResultActor, true, true, true);
-        
-        // 임포트 성공 메시지 표시
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(
-            FString::Printf(TEXT("3DXML 파일 임포트 완료: %s\n액터 이름이 %s로 변경되었습니다."),
-                            *FileResult.FileName, *PartNo)));
-    }
-    else
-    {
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 파일 임포트 실패")));
-    }
+	if (ResultActor)
+	{
+		// 액터 선택
+		GEditor->SelectNone(true, true, false);
+		GEditor->SelectActor(ResultActor, true, true, true);
+    
+		// 임포트 성공 메시지를 토스트 알림으로 표시
+		FNotificationInfo Info(FText::FromString(
+			FString::Printf(TEXT("3DXML 파일 임포트 완료: %s"),
+							*FileResult.FileName)));
+		Info.bUseLargeFont = false;
+		Info.FadeInDuration = 0.5f;
+		Info.FadeOutDuration = 0.5f;
+		Info.ExpireDuration = 7.5f;  // 7.5초 동안 표시
+		Info.bUseSuccessFailIcons = true;
+		Info.bUseThrobber = false;
+		Info.bFireAndForget = true;
+		Info.bAllowThrottleWhenFrameRateIsLow = false;
+    
+		TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
+		if (NotificationItem.IsValid())
+		{
+			NotificationItem->SetCompletionState(SNotificationItem::CS_Success);
+		}
+	}
+	else
+	{
+		// 임포트 실패 메시지를 토스트 알림으로 표시
+		FNotificationInfo Info(FText::FromString(TEXT("3DXML 파일 임포트 실패")));
+		Info.bUseLargeFont = false;
+		Info.FadeInDuration = 0.5f;
+		Info.FadeOutDuration = 0.5f;
+		Info.ExpireDuration = 4.0f;
+		Info.bUseSuccessFailIcons = true;
+		Info.bUseThrobber = false;
+		Info.bFireAndForget = true;
+		Info.bAllowThrottleWhenFrameRateIsLow = false;
+    
+		TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
+		if (NotificationItem.IsValid())
+		{
+			NotificationItem->SetCompletionState(SNotificationItem::CS_Fail);
+		}
+	}
 #else
     // 에디터가 아닌 환경에서는 임포트 불가
     FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 파일 임포트는 에디터 모드에서만 가능합니다.")));
