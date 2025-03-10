@@ -6,7 +6,7 @@
 #include "Engine/Texture2D.h"
 #include "ServiceLocator.h"
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "UI/TreeViewUtils.h"
+#include "TreeViewUtils.h"
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/Paths.h"

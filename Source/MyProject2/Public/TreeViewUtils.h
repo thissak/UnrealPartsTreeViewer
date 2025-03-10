@@ -133,4 +133,12 @@ public:
 	 * @return 파트 번호, 찾지 못한 경우 빈 문자열
 	 */
 	static FString ExtractPartNoFromAssetName(const FString& AssetName, int32 PartIndex = 3);
+
+	// 바운딩 박스 계산 함수 선언 추가
+	/**
+	 * 선택된 액터와 자식의 모든 스태틱 메시 컴포넌트의 바운딩 박스 계산
+	 * @param ActorName - 선택적 액터 이름 필터 (비어있으면 모든 액터에 대해 계산)
+	 * @return 성공 여부
+	 */
+	static bool CalculateSelectedActorMeshBounds(const FString& ActorName = TEXT(""));
 };

@@ -1,7 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "UI/PartMetadataWidget.h"
-#include "UI/TreeViewUtils.h"
+#include "TreeViewUtils.h"
 #include "ServiceLocator.h"
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체를 위해 필요
 #include "UI/PartImageManager.h"

@@ -9,7 +9,7 @@
 #include "Framework/Notifications/NotificationManager.h"
 #include "UI/ImportSettingsDialog.h"
 #include "UI/PartMetadataWidget.h"
-#include "UI/TreeViewUtils.h"
+#include "TreeViewUtils.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/STableRow.h"
 #include "Widgets/Text/STextBlock.h"
@@ -75,28 +75,58 @@ void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
         // 현재 선택 해제
         GEditor->SelectNone(true, true, false);
         
-        // 월드의 모든 액터를 검색
-        UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
-        if (EditorWorld)
+        // 1. 먼저 ImportedNodeManager에서 해당 파트 번호로 등록된 액터 찾기
+        if (AActor* RegisteredActor = FImportedNodeManager::Get().GetImportedActor(PartNo))
+        {
+            // ImportedNodeManager에 등록된 액터가 있으면 선택
+            GEditor->SelectActor(RegisteredActor, true, true, true);
+            UE_LOG(LogTemp, Display, TEXT("ImportedNodeManager에서 액터 찾음: %s"), *RegisteredActor->GetName());
+            return;
+        }
+        
+        // 2. 월드의 모든 액터에서 태그로 검색
+        if (UWorld* EditorWorld = GEditor->GetEditorWorldContext().World())
         {
             bool bFoundAnyActor = false;
             
-            // 모든 액터 순회
+            // ImportedPart_[PartNo] 태그 생성
+            FName PartTag = FName(*FString::Printf(TEXT("ImportedPart_%s"), *PartNo));
+            
+            // 모든 액터 순회하며 태그 검색
             for (TActorIterator<AActor> ActorItr(EditorWorld); ActorItr; ++ActorItr)
             {
                 AActor* CurrentActor = *ActorItr;
-                if (CurrentActor)
+                if (CurrentActor && CurrentActor->ActorHasTag(PartTag))
                 {
-                    // 액터 이름과 PartNo 비교
-                    FString ActorName = CurrentActor->GetName();
-                    
-                    // 정확히 일치하거나 부분 문자열로 포함되는지 검사
-                    if (ActorName.Equals(PartNo, ESearchCase::IgnoreCase) || 
-                        ActorName.Contains(PartNo, ESearchCase::IgnoreCase))
+                    // 태그가 일치하는 액터 선택
+                    GEditor->SelectActor(CurrentActor, true, true, true);
+                    bFoundAnyActor = true;
+                    UE_LOG(LogTemp, Display, TEXT("태그로 액터 찾음: %s"), *CurrentActor->GetName());
+                    break; // 첫 번째 일치 액터만 선택
+                }
+            }
+            
+            // 3. 태그에서도 찾지 못했으면 이름으로 검색
+            if (!bFoundAnyActor)
+            {
+                for (TActorIterator<AActor> ActorItr(EditorWorld); ActorItr; ++ActorItr)
+                {
+                    AActor* CurrentActor = *ActorItr;
+                    if (CurrentActor)
                     {
-                        // 액터 선택
-                        GEditor->SelectActor(CurrentActor, true, true, true);
-                        bFoundAnyActor = true;
+                        // 액터 이름과 PartNo 비교
+                        FString ActorName = CurrentActor->GetName();
+                        
+                        // 정확히 일치하거나 부분 문자열로 포함되는지 검사
+                        if (ActorName.Equals(PartNo, ESearchCase::IgnoreCase) || 
+                            ActorName.Contains(PartNo, ESearchCase::IgnoreCase))
+                        {
+                            // 액터 선택
+                            GEditor->SelectActor(CurrentActor, true, true, true);
+                            bFoundAnyActor = true;
+                            UE_LOG(LogTemp, Display, TEXT("이름으로 액터 찾음: %s"), *CurrentActor->GetName());
+                            break; // 첫 번째 일치 액터만 선택
+                        }
                     }
                 }
             }
@@ -490,6 +520,38 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
 				})
 			)
 		);
+
+        // 바운딩 박스 계산 메뉴 추가
+        MenuBuilder.AddMenuEntry(
+            FText::FromString(TEXT("Calculate Mesh Bounds")),
+            FText::FromString(TEXT("Calculate the bounding box of all meshes in the selected actor")),
+            FSlateIcon(),
+            FUIAction(
+                FExecuteAction::CreateLambda([this]() {
+                    // 선택된 항목 확인
+                    TArray<TSharedPtr<FPartTreeItem>> Items = TreeView->GetSelectedItems();
+                    if (Items.Num() > 0)
+                    {
+                        TSharedPtr<FPartTreeItem> Item = Items[0];
+                        
+                        // 선택된 노드의 Part No로 액터 찾기
+                        SelectActorByPartNo(Item->PartNo);
+                        
+                        // 바운딩 박스 계산
+                        FTreeViewUtils::CalculateSelectedActorMeshBounds();
+                    }
+                    else
+                    {
+                        // 선택된 항목이 없으면 현재 선택된 모든 액터에 대해 계산
+                        FTreeViewUtils::CalculateSelectedActorMeshBounds();
+                    }
+                }),
+                FCanExecuteAction::CreateLambda([]() { 
+                    // 항상 활성화
+                    return true; 
+                })
+            )
+        );
     }
     MenuBuilder.EndSection();
 

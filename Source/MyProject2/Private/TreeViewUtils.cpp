@@ -1,10 +1,14 @@
 ﻿// TreeViewUtils.cpp
 // 파트 트리뷰를 위한 일반 유틸리티 함수 모음 구현
 
-#include "UI/TreeViewUtils.h"
+#include "TreeViewUtils.h"
+
+#include "Selection.h"
+#include "Framework/Notifications/NotificationManager.h"
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체 정의를 위해 필요
 #include "Misc/FileHelper.h"
 #include "HAL/PlatformFilemanager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 
 // CSV 파일 읽기 함수
 bool FTreeViewUtils::ReadCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows)
@@ -346,4 +350,179 @@ FString FTreeViewUtils::ExtractPartNoFromAssetName(const FString& AssetName, int
     }
     
     return FString();
+}
+
+// UI/TreeViewUtils.cpp 파일에 함수 구현 추가
+    bool FTreeViewUtils::CalculateSelectedActorMeshBounds(const FString& ActorName)
+{
+    // 에디터 API 사용 가능한지 확인
+#if WITH_EDITOR
+    if (!GEditor)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("에디터 API를 사용할 수 없습니다."));
+        return false;
+    }
+    
+    // 현재 선택된 액터 가져오기
+    USelection* SelectedActors = GEditor->GetSelectedActors();
+    if (!SelectedActors || SelectedActors->Num() == 0)
+    {
+        FNotificationInfo Info(FText::FromString(TEXT("선택된 액터가 없습니다. 아웃라이너에서 액터를 선택해주세요.")));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
+        return false;
+    }
+    
+    int32 TotalActorsScanned = 0;
+    int32 TotalComponentsFound = 0;
+    
+    // 선택된 모든 액터 순회
+    for (FSelectionIterator It(*SelectedActors); It; ++It)
+    {
+        AActor* Actor = Cast<AActor>(*It);
+        if (!Actor)
+            continue;
+        
+        // 액터 이름 필터가 있으면 확인
+        if (!ActorName.IsEmpty() && !Actor->GetName().Contains(ActorName))
+            continue;
+        
+        TotalActorsScanned++;
+        
+        // 액터와 그 자식들의 모든 스태틱 메시 컴포넌트 찾기
+        TArray<UStaticMeshComponent*> MeshComponents;
+        Actor->GetComponents<UStaticMeshComponent>(MeshComponents);
+        
+        // 자식 액터들에 대한 컴포넌트도 찾기
+        TArray<AActor*> ChildActors;
+        Actor->GetAttachedActors(ChildActors, true); // true: 모든 하위 계층 포함
+        
+        for (AActor* ChildActor : ChildActors)
+        {
+            if (ChildActor)
+            {
+                TArray<UStaticMeshComponent*> ChildComponents;
+                ChildActor->GetComponents<UStaticMeshComponent>(ChildComponents);
+                MeshComponents.Append(ChildComponents);
+            }
+        }
+        
+        TotalComponentsFound += MeshComponents.Num();
+        
+        // 컴포넌트가 없으면 다음 액터로
+        if (MeshComponents.Num() == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("'%s' 액터에 스태틱 메시 컴포넌트가 없습니다."), *Actor->GetName());
+            continue;
+        }
+        
+        // 바운딩 박스 정보 배열
+        TArray<FString> BoundsInfo;
+        
+        // 전체 바운딩 박스 계산용
+        FBox TotalBounds(EForceInit::ForceInit);
+        
+        // 각 컴포넌트의 바운딩 박스 계산
+        for (UStaticMeshComponent* MeshComp : MeshComponents)
+        {
+            if (MeshComp && MeshComp->GetStaticMesh())
+            {
+                AActor* Owner = MeshComp->GetOwner();
+                FString CompName = MeshComp->GetName();
+                FString OwnerName = Owner ? Owner->GetName() : TEXT("Unknown");
+                
+                // 바운딩 박스 가져오기 (월드 스페이스)
+                FBoxSphereBounds WorldBounds = MeshComp->Bounds;
+                FBox BoundingBox = WorldBounds.GetBox();
+                FVector BoxSize = BoundingBox.GetSize();
+                FVector BoxCenter = BoundingBox.GetCenter();
+                float Volume = BoxSize.X * BoxSize.Y * BoxSize.Z;
+                
+                // 메시 이름 가져오기
+                FString MeshName = TEXT("Unknown");
+                if (MeshComp->GetStaticMesh())
+                {
+                    MeshName = MeshComp->GetStaticMesh()->GetName();
+                }
+                
+                // 삼축의 크기를 내림차순으로 정렬
+                TArray<float> SortedDimensions;
+                SortedDimensions.Add(BoxSize.X);
+                SortedDimensions.Add(BoxSize.Y);
+                SortedDimensions.Add(BoxSize.Z);
+                SortedDimensions.Sort([](float A, float B) { return A > B; });
+                
+                // 바운딩 박스 정보 문자열 생성
+                FString BoundsStr = FString::Printf(
+                    TEXT("%s - %s (%s): 크기=[%.2f, %.2f, %.2f] (길이순), 중심=[%.2f, %.2f, %.2f], 체적: %.2f)"),
+                    *OwnerName,
+                    *CompName,
+                    *MeshName,
+                    SortedDimensions[0], SortedDimensions[1], SortedDimensions[2],
+                    BoxCenter.X, BoxCenter.Y, BoxCenter.Z,
+                    Volume
+                );
+                
+                BoundsInfo.Add(BoundsStr);
+                
+                // 전체 바운딩 박스 업데이트
+                TotalBounds += BoundingBox;
+            }
+        }
+        
+        // 체적이 큰 순서대로 정렬
+        BoundsInfo.Sort([](const FString& A, const FString& B) {
+            FString VolumeA = A.Right(A.Find(TEXT("체적:")) + 20);
+            VolumeA = VolumeA.Left(VolumeA.Find(TEXT(")")));
+            
+            FString VolumeB = B.Right(B.Find(TEXT("체적:")) + 20);
+            VolumeB = VolumeB.Left(VolumeB.Find(TEXT(")")));
+            
+            return FCString::Atof(*VolumeA) > FCString::Atof(*VolumeB);
+        });
+        
+        // 결과 출력 - 로그
+        UE_LOG(LogTemp, Display, TEXT("===== '%s' 액터의 메시 바운딩 박스 정보 (총 %d개) ====="), *Actor->GetName(), BoundsInfo.Num());
+        
+        for (const FString& Info : BoundsInfo)
+        {
+            UE_LOG(LogTemp, Display, TEXT("%s"), *Info);
+        }
+        
+        // 전체 바운딩 박스 정보 계산
+        FVector TotalSize = TotalBounds.GetSize();
+        FVector TotalCenter = TotalBounds.GetCenter();
+        float TotalVolume = TotalSize.X * TotalSize.Y * TotalSize.Z;
+        
+        UE_LOG(LogTemp, Display, TEXT("===== '%s' 전체 바운딩 박스 정보 ====="), *Actor->GetName());
+        UE_LOG(LogTemp, Display, TEXT("크기: [%.2f, %.2f, %.2f], 중심: [%.2f, %.2f, %.2f], 체적: %.2f"),
+            TotalSize.X, TotalSize.Y, TotalSize.Z,
+            TotalCenter.X, TotalCenter.Y, TotalCenter.Z,
+            TotalVolume);
+        
+        // 결과 출력 - 알림
+        FString NotificationText = FString::Printf(
+            TEXT("'%s' 액터의 바운딩 박스 계산 완료 (컴포넌트: %d개)\n크기: [%.2f, %.2f, %.2f], 체적: %.2f"),
+            *Actor->GetName(),
+            BoundsInfo.Num(),
+            TotalSize.X, TotalSize.Y, TotalSize.Z,
+            TotalVolume
+        );
+        
+        FNotificationInfo Info(FText::FromString(NotificationText));
+        Info.ExpireDuration = 7.0f;
+        Info.bUseSuccessFailIcons = true;
+        
+        TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
+        if (NotificationItem.IsValid())
+        {
+            NotificationItem->SetCompletionState(SNotificationItem::CS_Success);
+        }
+    }
+    
+    return TotalActorsScanned > 0 && TotalComponentsFound > 0;
+#else
+    UE_LOG(LogTemp, Warning, TEXT("이 기능은 에디터에서만 사용 가능합니다."));
+    return false;
+#endif
 }
