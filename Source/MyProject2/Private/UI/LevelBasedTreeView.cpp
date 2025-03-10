@@ -3,6 +3,7 @@
 #include "UI/LevelBasedTreeView.h"
 
 #include "DatasmithSceneManager.h"
+#include "ImportedNodeManager.h"
 #include "ServiceLocator.h"
 #include "SlateOptMacros.h"
 #include "Framework/Notifications/NotificationManager.h"
@@ -484,7 +485,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
 				}),
 				FCanExecuteAction::CreateLambda([this]() { 
 					// 하나의 항목이 선택되었을 때만 활성화
-					return TreeView->GetSelectedItems().Num() == 1; 
+					return TreeView->GetSelectedItems().Num() > 0; 
 				})
 			)
 		);
@@ -721,9 +722,17 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
     // 기본 텍스트 색상과 폰트
     FSlateColor TextColor = FSlateColor(FLinearColor::White);
     FSlateFontInfo FontInfo = FCoreStyle::GetDefaultFontStyle("Regular", 9);
+    bool bShowImportIcon = false;
     
+    // 임포트된 노드 확인
+    if (FImportedNodeManager::Get().IsNodeImported(Item->PartNo))
+    {
+        TextColor = FSlateColor(FLinearColor(0.0f, 0.8f, 0.4f)); // 밝은 녹색
+        FontInfo = FCoreStyle::GetDefaultFontStyle("Bold", 9);
+        bShowImportIcon = true;
+    }
     // 검색 중이고 검색어가 있는 경우
-    if (bIsSearching && !SearchText.IsEmpty())
+    else if (bIsSearching && !SearchText.IsEmpty())
     {
         // 직접 검색어로 다시 확인
         FString LowerSearchText = SearchText.ToLower();
@@ -731,7 +740,7 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
         FString LowerNomenclature = Item->Nomenclature.ToLower();
         
         bool isSearchMatch = LowerPartNo.Contains(LowerSearchText) || 
-                            LowerNomenclature.Contains(LowerSearchText);
+                             LowerNomenclature.Contains(LowerSearchText);
         
         if (isSearchMatch)
         {
@@ -762,6 +771,16 @@ TSharedRef<ITableRow> SLevelBasedTreeView::OnGenerateRow(TSharedPtr<FPartTreeIte
                 .Text(FText::FromString(Item->PartNo))
                 .ColorAndOpacity(TextColor)
                 .Font(FontInfo)
+            ]
+            // 임포트된 노드에 아이콘 추가
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .VAlign(VAlign_Center)
+            .Padding(FMargin(2, 0))
+            [
+                SNew(SImage)
+                .Image(FAppStyle::GetBrush("Icons.Import"))
+                .Visibility(bShowImportIcon ? EVisibility::Visible : EVisibility::Collapsed)
             ]
         ];
 }
@@ -836,88 +855,149 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
 {
     // 선택된 노드 확인
     TArray<TSharedPtr<FPartTreeItem>> SelectedItems = TreeView->GetSelectedItems();
-    if (SelectedItems.Num() != 1)
+    if (SelectedItems.Num() == 0)
     {
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 임포트를 위해 정확히 하나의 노드가 선택되어야 합니다.")));
+        FNotificationInfo Info(FText::FromString(TEXT("3DXML 임포트를 위해 하나 이상의 노드를 선택해주세요.")));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
         return;
     }
-    
-    TSharedPtr<FPartTreeItem> SelectedItem = SelectedItems[0];
-    FString PartNo = SelectedItem->PartNo;
     
     // 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
     FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
     
-    // FTreeViewUtils를 사용하여 일치하는 파일 찾기
-    FFileMatchResult FileResult = FTreeViewUtils::FindMatchingFileForPartNo(
-        XMLDir,                // 디렉토리 경로
-        TEXT("*.3dxml"),       // 파일 패턴
-        PartNo                 // 파트 번호
-    );
+    int32 SuccessCount = 0;
+    int32 FailCount = 0;
+    TArray<FString> FailedParts;
+    TArray<FString> ImportedParts;
     
-    // 파일을 찾지 못한 경우 오류 메시지 표시
-    if (!FileResult.bFound)
+    // 선택된 모든 항목에 대해 처리
+    for (TSharedPtr<FPartTreeItem> SelectedItem : SelectedItems)
     {
-        FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FileResult.ErrorMessage));
-        return;
-    }
+        FString PartNo = SelectedItem->PartNo;
+        
+        // FTreeViewUtils를 사용하여 일치하는 파일 찾기
+        FFileMatchResult FileResult = FTreeViewUtils::FindMatchingFileForPartNo(
+            XMLDir,           // 디렉토리 경로
+            TEXT("*.3dxml"),  // 파일 패턴
+            PartNo            // 파트 번호
+        );
+        
+        // 파일을 찾지 못한 경우 다음 항목으로 넘어감
+        if (!FileResult.bFound)
+        {
+            FailCount++;
+            FailedParts.Add(PartNo);
+            UE_LOG(LogTemp, Warning, TEXT("파일을 찾을 수 없음: %s - %s"), *PartNo, *FileResult.ErrorMessage);
+            continue;
+        }
 
 #if WITH_EDITOR
-    // DatasmithSceneManager를 사용하여 임포트 및 처리
-    FDatasmithSceneManager SceneManager;
-    AActor* ResultActor = SceneManager.ImportAndProcessDatasmith(
-        FileResult.FilePath,   // 임포트할 파일 경로
-        PartNo                 // 파트 번호
-    );
-    
-	if (ResultActor)
-	{
-		// 액터 선택
-		GEditor->SelectNone(true, true, false);
-		GEditor->SelectActor(ResultActor, true, true, true);
-    
-		// 임포트 성공 메시지를 토스트 알림으로 표시
-		FNotificationInfo Info(FText::FromString(
-			FString::Printf(TEXT("3DXML 파일 임포트 완료: %s"),
-							*FileResult.FileName)));
-		Info.bUseLargeFont = false;
-		Info.FadeInDuration = 0.5f;
-		Info.FadeOutDuration = 0.5f;
-		Info.ExpireDuration = 7.5f;  // 7.5초 동안 표시
-		Info.bUseSuccessFailIcons = true;
-		Info.bUseThrobber = false;
-		Info.bFireAndForget = true;
-		Info.bAllowThrottleWhenFrameRateIsLow = false;
-    
-		TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
-		if (NotificationItem.IsValid())
-		{
-			NotificationItem->SetCompletionState(SNotificationItem::CS_Success);
-		}
-	}
-	else
-	{
-		// 임포트 실패 메시지를 토스트 알림으로 표시
-		FNotificationInfo Info(FText::FromString(TEXT("3DXML 파일 임포트 실패")));
-		Info.bUseLargeFont = false;
-		Info.FadeInDuration = 0.5f;
-		Info.FadeOutDuration = 0.5f;
-		Info.ExpireDuration = 4.0f;
-		Info.bUseSuccessFailIcons = true;
-		Info.bUseThrobber = false;
-		Info.bFireAndForget = true;
-		Info.bAllowThrottleWhenFrameRateIsLow = false;
-    
-		TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
-		if (NotificationItem.IsValid())
-		{
-			NotificationItem->SetCompletionState(SNotificationItem::CS_Fail);
-		}
-	}
+        // DatasmithSceneManager를 사용하여 임포트 및 처리
+        FDatasmithSceneManager SceneManager;
+        AActor* ResultActor = SceneManager.ImportAndProcessDatasmith(
+            FileResult.FilePath,   // 임포트할 파일 경로
+            PartNo                 // 파트 번호
+        );
+        
+        if (ResultActor)
+        {
+            SuccessCount++;
+            ImportedParts.Add(PartNo);
+            
+            // 마지막으로 처리된 액터 선택
+            if (SelectedItem == SelectedItems.Last())
+            {
+                GEditor->SelectNone(true, true, false);
+                GEditor->SelectActor(ResultActor, true, true, true);
+            }
+        }
+        else
+        {
+            FailCount++;
+            FailedParts.Add(PartNo);
+        }
 #else
-    // 에디터가 아닌 환경에서는 임포트 불가
-    FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("3DXML 파일 임포트는 에디터 모드에서만 가능합니다.")));
+        // 에디터가 아닌 환경에서는 임포트 불가
+        FNotificationInfo Info(FText::FromString(TEXT("3DXML 파일 임포트는 에디터 모드에서만 가능합니다.")));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
+        return;
 #endif
+    }
+    
+    // 트리뷰 갱신
+    if (SuccessCount > 0 && TreeView.IsValid())
+    {
+        // 트리뷰 강제 갱신
+        TreeView->RebuildList();
+        
+        // 임포트된 마지막 항목을 화면에 표시
+        if (ImportedParts.Num() > 0)
+        {
+            FString LastImportedPart = ImportedParts.Last();
+            TSharedPtr<FPartTreeItem>* ItemPtr = PartNoToItemMap.Find(LastImportedPart);
+            if (ItemPtr && ItemPtr->IsValid())
+            {
+                TreeView->SetItemSelection(*ItemPtr, true, ESelectInfo::OnMouseClick);
+                TreeView->RequestScrollIntoView(*ItemPtr);
+            }
+        }
+    }
+    
+    // 처리 결과 알림 표시
+    if (SuccessCount > 0 && FailCount == 0)
+    {
+        FString ResultMessage = FString::Printf(TEXT("%d개 노드에 3DXML 파일 임포트가 완료되었습니다."), SuccessCount);
+        
+        FNotificationInfo Info(FText::FromString(ResultMessage));
+        Info.bUseLargeFont = false;
+        Info.FadeInDuration = 0.5f;
+        Info.FadeOutDuration = 0.5f;
+        Info.ExpireDuration = 4.0f;
+        Info.bUseSuccessFailIcons = true;
+        
+        TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
+        if (NotificationItem.IsValid())
+        {
+            NotificationItem->SetCompletionState(SNotificationItem::CS_Success);
+        }
+    }
+    else if (SuccessCount > 0 && FailCount > 0)
+    {
+        FString ResultMessage = FString::Printf(TEXT("%d개 성공, %d개 실패\n실패한 노드: %s"), 
+            SuccessCount, FailCount, *FString::Join(FailedParts, TEXT(", ")));
+        
+        FNotificationInfo Info(FText::FromString(ResultMessage));
+        Info.bUseLargeFont = false;
+        Info.FadeInDuration = 0.5f;
+        Info.FadeOutDuration = 0.5f;
+        Info.ExpireDuration = 6.0f;  // 좀 더 긴 시간 표시
+        Info.bUseSuccessFailIcons = true;
+        
+        TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
+        if (NotificationItem.IsValid())
+        {
+            NotificationItem->SetCompletionState(SNotificationItem::CS_Fail);
+        }
+    }
+    else if (SuccessCount == 0)
+    {
+        FString ResultMessage = TEXT("모든 3DXML 파일 임포트에 실패했습니다.");
+        
+        FNotificationInfo Info(FText::FromString(ResultMessage));
+        Info.bUseLargeFont = false;
+        Info.FadeInDuration = 0.5f;
+        Info.FadeOutDuration = 0.5f;
+        Info.ExpireDuration = 4.0f;
+        Info.bUseSuccessFailIcons = true;
+        
+        TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
+        if (NotificationItem.IsValid())
+        {
+            NotificationItem->SetCompletionState(SNotificationItem::CS_Fail);
+        }
+    }
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION

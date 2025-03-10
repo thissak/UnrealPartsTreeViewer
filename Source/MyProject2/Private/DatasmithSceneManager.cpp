@@ -9,6 +9,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "EngineUtils.h"
 #include "Editor.h"
+#include "ImportedNodeManager.h"
 #include "GameFramework/Actor.h"
 #include "Materials/MaterialInstance.h"
 #include "UObject/UObjectGlobals.h"
@@ -707,6 +708,12 @@ AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePat
                 
                 // 액터 이름 변경 및 정리
                 TargetActor = RenameAndCleanupActor(TargetActor, PartNo);
+
+            	// 투명도가 있는 메시 찾기 및 제거
+            	RemoveTransparentMeshActors(TargetActor);
+            	
+            	// 임포트된 노드 관리자에 등록
+            	FImportedNodeManager::Get().RegisterImportedNode(PartNo, TargetActor);
                 
                 // DatasmithSceneActor 제거
                 UE_LOG(LogTemp, Display, TEXT("DatasmithSceneActor 제거: %s"), *SceneActor->GetName());
@@ -719,6 +726,68 @@ AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePat
     
     UE_LOG(LogTemp, Warning, TEXT("임포트된 DatasmithScene 객체를 찾을 수 없습니다."));
     return nullptr;
+}
+
+void FDatasmithSceneManager::RemoveTransparentMeshActors(AActor* RootActor)
+{
+	if (!RootActor)
+		return;
+    
+	// 모든 StaticMesh 액터 찾기
+	TArray<AStaticMeshActor*> StaticMeshActors;
+	FindAllStaticMeshActors(RootActor, StaticMeshActors);
+    
+	UE_LOG(LogTemp, Display, TEXT("총 메시 액터 발견: %d개"), StaticMeshActors.Num());
+    
+	// 제거할 투명 메시 액터 목록
+	TArray<AStaticMeshActor*> ActorsToRemove;
+    
+	// 각 메시 액터에 대해 투명도 확인
+	for (AStaticMeshActor* MeshActor : StaticMeshActors)
+	{
+		if (!MeshActor || !MeshActor->GetStaticMeshComponent())
+			continue;
+        
+		UStaticMeshComponent* MeshComp = MeshActor->GetStaticMeshComponent();
+		bool bHasTransparentMaterial = false;
+        
+		// 메시의 모든 머티리얼 확인
+		for (int32 i = 0; i < MeshComp->GetNumMaterials(); ++i)
+		{
+			UMaterialInterface* Material = MeshComp->GetMaterial(i);
+			if (HasTransparency(Material))
+			{
+				bHasTransparentMaterial = true;
+				UE_LOG(LogTemp, Verbose, TEXT("투명 머티리얼 발견: %s (액터: %s)"), 
+					  Material ? *Material->GetName() : TEXT("None"),
+					  *MeshActor->GetName());
+				break;
+			}
+		}
+        
+		// 투명 머티리얼이 있는 메시 액터는 제거 목록에 추가
+		if (bHasTransparentMaterial)
+		{
+			ActorsToRemove.Add(MeshActor);
+		}
+	}
+    
+	// 투명 메시 액터 제거
+	int32 RemovedCount = 0;
+	for (AStaticMeshActor* ActorToRemove : ActorsToRemove)
+	{
+		if (ActorToRemove)
+		{
+			FString ActorName = ActorToRemove->GetName();
+			ActorToRemove->Destroy();
+			RemovedCount++;
+            
+			UE_LOG(LogTemp, Verbose, TEXT("투명 메시 액터 제거: %s"), *ActorName);
+		}
+	}
+    
+	UE_LOG(LogTemp, Display, TEXT("투명 메시 액터 제거 완료: %d개 제거됨 (총 %d개 중)"), 
+		  RemovedCount, StaticMeshActors.Num());
 }
 
 void FDatasmithSceneManager::CleanupNonStaticMeshActors(AActor* RootActor)

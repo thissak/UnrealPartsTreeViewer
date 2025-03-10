@@ -124,6 +124,12 @@ public:
 	 */
 	void CleanupNonStaticMeshActors(AActor* RootActor);
 
+	/**
+	 * 투명 메시 액터들을 제거하는 함수
+	 * @param RootActor - 루트 액터
+	 */
+	void RemoveTransparentMeshActors(AActor* RootActor);
+
 private:
 	/** 데이터스미스 씬 객체 */
 	TWeakObjectPtr<UObject> DatasmithScene;

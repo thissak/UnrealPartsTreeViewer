@@ -54,6 +54,23 @@ protected:
 };
 
 /**
+ * 임포트된 노드 필터 - 임포트된 노드만 표시
+ */
+class FImportedNodeFilter : public IPartTreeViewFilter
+{
+public:
+	FImportedNodeFilter() {}
+
+	virtual FString GetFilterName() const override { return TEXT("ImportedNodeFilter"); }
+	virtual FString GetFilterDescription() const override { return TEXT("Show only imported nodes"); }
+
+	virtual bool PassesFilter(const TSharedPtr<FPartTreeItem>& Item) const override;
+    
+private:
+	bool HasImportedChild(const TSharedPtr<FPartTreeItem>& Item) const;
+};
+
+/**
  * 이미지 필터 - 이미지가 있는 노드만 표시
  */
 class FImageFilter : public IPartTreeViewFilter

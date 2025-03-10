@@ -1,7 +1,40 @@
 ﻿// Source/MyProject2/Private/UI/PartTreeViewFilter.cpp
-#include "UI/PartTreeViewFilter.h"
+
+#include "PartTreeViewFilter.h"
 #include "ServiceLocator.h"
 #include "UI/PartImageManager.h"
+#include "ImportedNodeManager.h"
+
+//=================================================================
+// FImportedNodeFilter 구현
+//=================================================================
+bool FImportedNodeFilter::PassesFilter(const TSharedPtr<FPartTreeItem>& Item) const
+{
+	if (!bEnabled || !Item.IsValid())
+		return true;
+
+	// 항목이 임포트되었거나 자식 중 임포트된 항목이 있는지 확인
+	bool bIsImported = FImportedNodeManager::Get().IsNodeImported(Item->PartNo);
+	bool bHasImportedChild = HasImportedChild(Item);
+    
+	UE_LOG(LogTemp, Verbose, TEXT("임포트 필터 검사: PartNo=%s, IsImported=%d, HasImportedChild=%d"), 
+		   *Item->PartNo, bIsImported, bHasImportedChild);
+    
+	return bIsImported || bHasImportedChild;
+}
+
+bool FImportedNodeFilter::HasImportedChild(const TSharedPtr<FPartTreeItem>& Item) const
+{
+	if (!Item.IsValid())
+		return false;
+        
+	for (const auto& Child : Item->Children)
+	{
+		if (FImportedNodeManager::Get().IsNodeImported(Child->PartNo) || HasImportedChild(Child))
+			return true;
+	}
+	return false;
+}
 
 //=================================================================
 // FImageFilter 구현
@@ -47,6 +80,7 @@ FPartTreeViewFilterManager::FPartTreeViewFilterManager()
     // 기본 필터 추가
     AddFilter(MakeShared<FImageFilter>());
     AddFilter(MakeShared<FDuplicateFilter>());
+	AddFilter(MakeShared<FImportedNodeFilter>());
 }
 
 FPartTreeViewFilterManager::~FPartTreeViewFilterManager()
