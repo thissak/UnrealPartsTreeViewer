@@ -125,6 +125,13 @@ public:
 	 */
 	void RemoveTransparentMeshActors(AActor* RootActor);
 
+	/**
+	 * 액터의 피벗을 메시 컴포넌트들의 중앙으로 이동시키는 함수
+	 * @param TargetActor - 피벗을 중앙화할 대상 액터
+	 * @return 성공 여부
+	 */
+	bool CenterActorPivot(AActor* TargetActor);
+
 	void SetImportSettings(const FImportSettings& InSettings);
 
 	void ApplyImportSettingsToOptions(UDatasmithImportOptions* ImportOptions);

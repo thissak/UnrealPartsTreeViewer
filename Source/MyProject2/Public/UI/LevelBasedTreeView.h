@@ -64,7 +64,7 @@ public:
     //===== 선택 및 상호작용 기능 =====//
     
     /** 특정 파트 번호와 일치하는 액터 선택 */
-    void SelectActorByPartNo(const FString& PartNo);
+    AActor* SelectActorByPartNo(const FString& PartNo);
     
     /** 선택된 노드에 3DXML 파일 임포트 */
 	void ImportXMLToSelectedNode();

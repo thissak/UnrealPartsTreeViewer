@@ -67,8 +67,10 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
 }
 
 // 액터 선택 함수
-void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
+AActor* SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
 {
+    AActor* FoundActor = nullptr;
+    
 #if WITH_EDITOR
     if (GEditor)
     {
@@ -81,14 +83,13 @@ void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
             // ImportedNodeManager에 등록된 액터가 있으면 선택
             GEditor->SelectActor(RegisteredActor, true, true, true);
             UE_LOG(LogTemp, Display, TEXT("ImportedNodeManager에서 액터 찾음: %s"), *RegisteredActor->GetName());
-            return;
+            FoundActor = RegisteredActor;
+            return FoundActor;
         }
         
         // 2. 월드의 모든 액터에서 태그로 검색
         if (UWorld* EditorWorld = GEditor->GetEditorWorldContext().World())
         {
-            bool bFoundAnyActor = false;
-            
             // ImportedPart_[PartNo] 태그 생성
             FName PartTag = FName(*FString::Printf(TEXT("ImportedPart_%s"), *PartNo));
             
@@ -100,14 +101,14 @@ void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
                 {
                     // 태그가 일치하는 액터 선택
                     GEditor->SelectActor(CurrentActor, true, true, true);
-                    bFoundAnyActor = true;
+                    FoundActor = CurrentActor;
                     UE_LOG(LogTemp, Display, TEXT("태그로 액터 찾음: %s"), *CurrentActor->GetName());
                     break; // 첫 번째 일치 액터만 선택
                 }
             }
             
             // 3. 태그에서도 찾지 못했으면 이름으로 검색
-            if (!bFoundAnyActor)
+            if (!FoundActor)
             {
                 for (TActorIterator<AActor> ActorItr(EditorWorld); ActorItr; ++ActorItr)
                 {
@@ -123,7 +124,7 @@ void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
                         {
                             // 액터 선택
                             GEditor->SelectActor(CurrentActor, true, true, true);
-                            bFoundAnyActor = true;
+                            FoundActor = CurrentActor;
                             UE_LOG(LogTemp, Display, TEXT("이름으로 액터 찾음: %s"), *CurrentActor->GetName());
                             break; // 첫 번째 일치 액터만 선택
                         }
@@ -131,13 +132,15 @@ void SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
                 }
             }
             
-            if (!bFoundAnyActor)
+            if (!FoundActor)
             {
                 UE_LOG(LogTemp, Warning, TEXT("일치하는 액터를 찾을 수 없음: %s"), *PartNo);
             }
         }
     }
 #endif
+
+    return FoundActor;
 }
 
 // 검색 UI 위젯 반환 함수
@@ -357,6 +360,30 @@ void SLevelBasedTreeView::OnTreeItemDoubleClick(TSharedPtr<FPartTreeItem> Item)
     {
         // 더블클릭 시 SelectActorByPartNo 함수 호출
         SelectActorByPartNo(Item->PartNo);
+        
+        // 선택된 액터에 카메라 초점 맞추기
+#if WITH_EDITOR
+        if (GEditor)
+        {
+            // 현재 선택된 액터 가져오기
+            USelection* SelectedActors = GEditor->GetSelectedActors();
+            if (SelectedActors && SelectedActors->Num() > 0)
+            {
+                // 첫 번째 선택된 액터를 가져옴
+                AActor* SelectedActor = Cast<AActor>(SelectedActors->GetSelectedObject(0));
+                if (SelectedActor)
+                {
+                    // 모든 뷰포트에 액터 표시 요청
+                    GEditor->MoveViewportCamerasToActor(*SelectedActor, false);
+                    
+                    // 뷰포트 갱신
+                    GEditor->RedrawLevelEditingViewports();
+                    
+                    UE_LOG(LogTemp, Display, TEXT("카메라를 선택된 액터로 이동: %s"), *SelectedActor->GetName());
+                }
+            }
+        }
+#endif
     }
 }
 
