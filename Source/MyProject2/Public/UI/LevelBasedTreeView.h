@@ -79,6 +79,20 @@ private:
     bool bIsSearching;                // 검색 중 상태
     TArray<TSharedPtr<FPartTreeItem>> SearchResults; // 검색 결과 항목
     
+    // 필터 패널 관련 변수
+    bool bShowFilterPanel;
+    TSharedPtr<SBorder> FilterPanelWidget;
+    TSharedPtr<SCheckBox> ImageFilterCheckbox;
+    
+    // 필터 버튼 클릭 이벤트 핸들러
+    FReply OnFilterButtonClicked();
+    
+    // 필터 초기화 버튼 클릭 이벤트 핸들러
+    FReply OnResetFiltersClicked();
+    
+    // 이미지 필터 체크박스 변경 이벤트 핸들러
+    void OnImageFilterCheckedChanged(ECheckBoxState NewState);
+    
     /** 레벨 0 항목들을 접는 헬퍼 함수 */
     void FoldLevelZeroItems();
     

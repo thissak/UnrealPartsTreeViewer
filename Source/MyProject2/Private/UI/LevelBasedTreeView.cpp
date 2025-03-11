@@ -148,77 +148,98 @@ AActor* SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
 }
 
 // 검색 UI 위젯 반환 함수
+// 검색 UI 위젯 반환 함수
 TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 {
-	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(FMargin(4.0f))
-		[
-			SNew(SVerticalBox)
+    return SNew(SBorder)
+       .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+       .Padding(FMargin(4.0f))
+       [
+          SNew(SVerticalBox)
             
-			// 검색창 설명 텍스트
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(2)
-			[
-				SNew(STextBlock)
-				.Text(FText::FromString("Search Parts"))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
-			]
+          // 검색창 설명 텍스트
+          + SVerticalBox::Slot()
+          .AutoHeight()
+          .Padding(2)
+          [
+             SNew(STextBlock)
+             .Text(FText::FromString("Search Parts"))
+             .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
+          ]
 
-		    // 검색 입력창과 설정 아이콘을 포함하는 가로 상자
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(2)
-            [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                [
-                    SNew(SSearchBox)
-                    .HintText(FText::FromString("Enter text to search..."))
-                    .OnTextChanged(this, &SLevelBasedTreeView::OnSearchTextChanged)
-                    .OnTextCommitted(this, &SLevelBasedTreeView::OnSearchTextCommitted)
-                ]
-                
-                // 설정 아이콘 버튼
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                .Padding(4, 0, 0, 0)
-                .VAlign(VAlign_Center)
-                [
-                    SNew(SButton)
-                    .ButtonStyle(FAppStyle::Get(), "SimpleButton")
-                    .ToolTipText(FText::FromString("Import Settings"))
-                    .OnClicked(this, &SLevelBasedTreeView::OnSettingsButtonClicked)
-                    .ContentPadding(FMargin(1, 0))
-                    [
-                        SNew(SImage)
-                        .Image(FAppStyle::GetBrush("Icons.Settings"))
-                        .ColorAndOpacity(FSlateColor::UseForeground())
-                    ]
-                ]
-            ]
+          // 검색 입력창과 필터, 설정 버튼을 포함하는 가로 상자
+          + SVerticalBox::Slot()
+          .AutoHeight()
+          .Padding(2)
+          [
+              SNew(SHorizontalBox)
+              
+              // 필터 토글 버튼
+              + SHorizontalBox::Slot()
+              .AutoWidth()
+              .VAlign(VAlign_Center)
+              .Padding(0, 0, 4, 0)
+              [
+                  SNew(SButton)
+                  .ButtonStyle(FAppStyle::Get(), "SimpleButton")
+                  .ToolTipText(FText::FromString("Show/Hide Filters"))
+                  .OnClicked(this, &SLevelBasedTreeView::OnFilterButtonClicked)
+                  .ContentPadding(FMargin(2, 0))
+                  [
+                      SNew(SImage)
+                      .Image(FAppStyle::GetBrush("Icons.Filter"))
+                      .ColorAndOpacity(FSlateColor::UseForeground())
+                  ]
+              ]
+              
+              // 검색창
+              + SHorizontalBox::Slot()
+              .FillWidth(1.0f)
+              [
+                  SNew(SSearchBox)
+                  .HintText(FText::FromString("Enter text to search..."))
+                  .OnTextChanged(this, &SLevelBasedTreeView::OnSearchTextChanged)
+                  .OnTextCommitted(this, &SLevelBasedTreeView::OnSearchTextCommitted)
+              ]
+              
+              // 설정 버튼
+              + SHorizontalBox::Slot()
+              .AutoWidth()
+              .Padding(4, 0, 0, 0)
+              .VAlign(VAlign_Center)
+              [
+                  SNew(SButton)
+                  .ButtonStyle(FAppStyle::Get(), "SimpleButton")
+                  .ToolTipText(FText::FromString("Import Settings"))
+                  .OnClicked(this, &SLevelBasedTreeView::OnSettingsButtonClicked)
+                  .ContentPadding(FMargin(1, 0))
+                  [
+                      SNew(SImage)
+                      .Image(FAppStyle::GetBrush("Icons.Settings"))
+                      .ColorAndOpacity(FSlateColor::UseForeground())
+                  ]
+              ]
+          ]
             
-			// 검색 결과 정보
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(2)
-			[
-				SNew(STextBlock)
-				.Text_Lambda([this]() -> FText {
-					if (bIsSearching && !SearchText.IsEmpty())
-					{
-						return FText::Format(FText::FromString("Found {0} matches for '{1}'"), 
-							FText::AsNumber(SearchResults.Num()), FText::FromString(SearchText));
-					}
-					return FText::GetEmpty();
-				})
-				.Visibility_Lambda([this]() -> EVisibility {
-					return (bIsSearching && !SearchText.IsEmpty()) ? EVisibility::Visible : EVisibility::Collapsed;
-				})
-			]
-		];
+          // 검색 결과 정보
+          + SVerticalBox::Slot()
+          .AutoHeight()
+          .Padding(2)
+          [
+             SNew(STextBlock)
+             .Text_Lambda([this]() -> FText {
+                if (bIsSearching && !SearchText.IsEmpty())
+                {
+                   return FText::Format(FText::FromString("Found {0} matches for '{1}'"), 
+                      FText::AsNumber(SearchResults.Num()), FText::FromString(SearchText));
+                }
+                return FText::GetEmpty();
+             })
+             .Visibility_Lambda([this]() -> EVisibility {
+                return (bIsSearching && !SearchText.IsEmpty()) ? EVisibility::Visible : EVisibility::Collapsed;
+             })
+          ]
+       ];
 }
 
 // 검색어 변경 이벤트 핸들러
@@ -332,6 +353,55 @@ FReply SLevelBasedTreeView::OnSettingsButtonClicked()
     }
     
     return FReply::Handled();
+}
+
+FReply SLevelBasedTreeView::OnFilterButtonClicked()
+{
+    // 필터 패널 표시/숨김 상태 토글
+    bShowFilterPanel = !bShowFilterPanel;
+    
+    // 필터 패널 위젯 가시성 업데이트
+    if (FilterPanelWidget.IsValid())
+    {
+        FilterPanelWidget->SetVisibility(bShowFilterPanel ? EVisibility::Visible : EVisibility::Collapsed);
+    }
+    
+    return FReply::Handled();
+}
+
+FReply SLevelBasedTreeView::OnResetFiltersClicked()
+{
+    // 모든 필터 초기화
+    if (FilterManager.IsValid())
+    {
+        FilterManager->ResetFilters();
+        
+        // 체크박스 상태 업데이트
+        if (ImageFilterCheckbox.IsValid())
+        {
+            ImageFilterCheckbox->SetIsChecked(ECheckBoxState::Unchecked);
+        }
+        
+        // 트리뷰 갱신
+        if (TreeView.IsValid())
+        {
+            TreeView->RequestTreeRefresh();
+        }
+        
+        UE_LOG(LogTemp, Display, TEXT("모든 필터가 초기화되었습니다."));
+    }
+    
+    return FReply::Handled();
+}
+
+void SLevelBasedTreeView::OnImageFilterCheckedChanged(ECheckBoxState NewState)
+{
+    // 체크박스 상태에 따라 이미지 필터 활성화/비활성화
+    bool bEnable = (NewState == ECheckBoxState::Checked);
+    ToggleImageFiltering(bEnable);
+    
+    UE_LOG(LogTemp, Display, TEXT("이미지 필터 %s: 체크박스 변경 이벤트"), 
+        bEnable ? TEXT("활성화") : TEXT("비활성화"));
 }
 
 // 레벨 0 항목들 접기 함수
