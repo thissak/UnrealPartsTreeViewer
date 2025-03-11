@@ -36,6 +36,7 @@ void SLevelBasedTreeView::Construct(const FArguments& InArgs)
     MaxLevel = 0;
 	bIsSearching = false;  // 검색 상태 초기화
 	SearchText = "";       // 검색어 초기화
+	bShowFilterPanel = false; // 필터 패널 초기 상태 숨김
 
 	// 필터 관리자 초기화
 	FilterManager = MakeShared<FPartTreeViewFilterManager>();
@@ -148,9 +149,50 @@ AActor* SLevelBasedTreeView::SelectActorByPartNo(const FString& PartNo)
 }
 
 // 검색 UI 위젯 반환 함수
-// 검색 UI 위젯 반환 함수
+// SLevelBasedTreeView.cpp의 GetSearchWidget() 함수 수정 부분
+
 TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 {
+    // 필터 패널 생성 (처음에는 숨김 상태)
+    TSharedRef<SVerticalBox> FilterPanel = SNew(SVerticalBox);
+    
+    // 이미지 필터 체크박스 추가
+    FilterPanel->AddSlot()
+    .AutoHeight()
+    .Padding(4, 2, 0, 2)
+    [
+        SAssignNew(ImageFilterCheckbox, SCheckBox)
+        .IsChecked(FilterManager->IsFilterEnabled("ImageFilter") ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+        .OnCheckStateChanged(this, &SLevelBasedTreeView::OnImageFilterCheckedChanged)
+        [
+            SNew(STextBlock)
+            .Text(FText::FromString(TEXT("Image"))) // 오타 수정: Imaage -> Image
+        ]
+    ];
+    
+    // 필터 초기화 버튼 추가
+    FilterPanel->AddSlot()
+    .AutoHeight()
+    .Padding(4, 4, 0, 2)
+    .HAlign(HAlign_Left)
+    [
+        SNew(SButton)
+        .Text(FText::FromString(TEXT("Reset")))
+        .OnClicked(this, &SLevelBasedTreeView::OnResetFiltersClicked)
+    ];
+    
+    // 필터 패널을 Border 위젯으로 감싸서 가시성 제어할 수 있게 함
+    TSharedRef<SBorder> FilterPanelBorder = SNew(SBorder)
+    .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+    .Padding(FMargin(4))
+    .Visibility(bShowFilterPanel ? EVisibility::Visible : EVisibility::Collapsed)
+    [
+        FilterPanel
+    ];
+    
+    // FilterPanelWidget 멤버 변수에 저장 (가시성 변경을 위해)
+    FilterPanelWidget = FilterPanelBorder;
+    
     return SNew(SBorder)
        .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
        .Padding(FMargin(4.0f))
@@ -219,6 +261,13 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
                       .ColorAndOpacity(FSlateColor::UseForeground())
                   ]
               ]
+          ]
+          
+          // 필터 패널 추가 (이 부분이 누락되었음)
+          + SVerticalBox::Slot()
+          .AutoHeight()
+          [
+              FilterPanelWidget.ToSharedRef()
           ]
             
           // 검색 결과 정보
@@ -360,10 +409,17 @@ FReply SLevelBasedTreeView::OnFilterButtonClicked()
     // 필터 패널 표시/숨김 상태 토글
     bShowFilterPanel = !bShowFilterPanel;
     
+    // 디버깅용 로그 추가
+    UE_LOG(LogTemp, Display, TEXT("필터 버튼 클릭됨. 상태: %s"), bShowFilterPanel ? TEXT("표시") : TEXT("숨김"));
+    
     // 필터 패널 위젯 가시성 업데이트
     if (FilterPanelWidget.IsValid())
     {
         FilterPanelWidget->SetVisibility(bShowFilterPanel ? EVisibility::Visible : EVisibility::Collapsed);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("필터 패널 위젯이 유효하지 않습니다."));
     }
     
     return FReply::Handled();
@@ -516,7 +572,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
     MenuBuilder.BeginSection("TreeItemActions", FText::FromString(TEXT("Menu")));
     {
         // 이미지 필터 활성화
-        MenuBuilder.AddMenuEntry(
+        /*MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("Show Only Nodes With Images")),
             FText::FromString(TEXT("Display only nodes that have images")),
             FSlateIcon(),
@@ -549,7 +605,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                     return FilterManager->IsFilterEnabled("ImageFilter"); 
                 })
             )
-        );
+        );*/
         
         // 노드 이름 클립보드에 복사
         /*MenuBuilder.AddMenuEntry(
