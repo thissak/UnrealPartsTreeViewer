@@ -2,11 +2,16 @@
 
 #include "UI/LevelBasedTreeView.h"
 
+#include "AssetViewUtils.h"
+#include "AssetToolsModule.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "DatasmithSceneManager.h"
+#include "Dialogs/Dialogs.h"
+#include "Framework/Notifications/NotificationManager.h"
 #include "ImportedNodeManager.h"
+#include "ObjectTools.h"
 #include "ServiceLocator.h"
 #include "SlateOptMacros.h"
-#include "Framework/Notifications/NotificationManager.h"
 #include "UI/ImportSettingsDialog.h"
 #include "UI/PartMetadataWidget.h"
 #include "TreeViewUtils.h"
@@ -15,7 +20,6 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SSearchBox.h"
 #include "Widgets/Notifications/SNotificationList.h"
-#include "Windows/WindowsPlatformApplicationMisc.h"
 
 #if WITH_EDITOR
 #include "Editor.h"
@@ -161,22 +165,40 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 				.Text(FText::FromString("Search Parts"))
 				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 14))
 			]
-            
-			// 검색 입력창
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(2)
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.FillWidth(1.0f)
-				[
-					SNew(SSearchBox)
-					.HintText(FText::FromString("Enter text to search..."))
-					.OnTextChanged(this, &SLevelBasedTreeView::OnSearchTextChanged)
-					.OnTextCommitted(this, &SLevelBasedTreeView::OnSearchTextCommitted)
-				]
-			]
+
+		    // 검색 입력창과 설정 아이콘을 포함하는 가로 상자
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(2)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                [
+                    SNew(SSearchBox)
+                    .HintText(FText::FromString("Enter text to search..."))
+                    .OnTextChanged(this, &SLevelBasedTreeView::OnSearchTextChanged)
+                    .OnTextCommitted(this, &SLevelBasedTreeView::OnSearchTextCommitted)
+                ]
+                
+                // 설정 아이콘 버튼
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(4, 0, 0, 0)
+                .VAlign(VAlign_Center)
+                [
+                    SNew(SButton)
+                    .ButtonStyle(FAppStyle::Get(), "SimpleButton")
+                    .ToolTipText(FText::FromString("Import Settings"))
+                    .OnClicked(this, &SLevelBasedTreeView::OnSettingsButtonClicked)
+                    .ContentPadding(FMargin(1, 0))
+                    [
+                        SNew(SImage)
+                        .Image(FAppStyle::GetBrush("Icons.Settings"))
+                        .ColorAndOpacity(FSlateColor::UseForeground())
+                    ]
+                ]
+            ]
             
 			// 검색 결과 정보
 			+ SVerticalBox::Slot()
@@ -285,6 +307,31 @@ void SLevelBasedTreeView::PerformSearch(const FString& InSearchText)
     
     // 트리뷰 갱신 (필터링 적용)
     TreeView->RequestTreeRefresh();
+}
+
+// 설정 핸들러
+FReply SLevelBasedTreeView::OnSettingsButtonClicked()
+{
+    // 현재 저장된 임포트 설정 가져오기
+    FImportSettings CurrentSettings = UImportSettingsManager::Get()->GetSettings();
+    FImportSettings NewSettings = CurrentSettings;
+    
+    // 임포트 설정 대화상자 표시
+    bool bConfirmed = ShowImportSettingsDialog(
+        FSlateApplication::Get().GetActiveTopLevelWindow(),
+        FText::FromString(TEXT("3DXML 임포트 설정")),
+        CurrentSettings,
+        NewSettings
+    );
+    
+    if (bConfirmed)
+    {
+        // 새 설정 저장
+        UImportSettingsManager::Get()->SaveSettings(NewSettings);
+        UE_LOG(LogTemp, Display, TEXT("3DXML 임포트 설정이 업데이트되었습니다."));
+    }
+    
+    return FReply::Handled();
 }
 
 // 레벨 0 항목들 접기 함수
@@ -435,7 +482,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
         );
         
         // 노드 이름 클립보드에 복사
-        MenuBuilder.AddMenuEntry(
+        /*MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("Copy Node Name")),
             FText::FromString(TEXT("Copy selected node name to clipboard")),
             FSlateIcon(),
@@ -467,10 +514,10 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                     return TreeView->GetSelectedItems().Num() > 0; 
                 })
             )
-        );
+        );*/
         
         // 상세 정보 보기
-        MenuBuilder.AddMenuEntry(
+        /*MenuBuilder.AddMenuEntry(
             FText::FromString(TEXT("View Details")),
             FText::FromString(TEXT("View detailed information for the selected item")),
             FSlateIcon(),
@@ -490,7 +537,7 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                     return SelectedItem.IsValid(); 
                 })
             )
-        );
+        );*/
         
         // 선택 노드 펼치기 메뉴
         MenuBuilder.AddMenuEntry(
@@ -531,6 +578,9 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                 })
             )
         );
+        
+        // 분리선 추가
+        MenuBuilder.AddMenuSeparator();
 
     	// 3DXML 파일 임포트 메뉴
     	MenuBuilder.AddMenuEntry(
@@ -941,11 +991,6 @@ void SLevelBasedTreeView::ExpandPathToItem(const TSharedPtr<FPartTreeItem>& Item
 }
 
 // 3DXML 파일 임포트 함수
-// Source/MyProject2/Private/UI/LevelBasedTreeView.cpp 파일의 
-// ImportXMLToSelectedNode 함수 수정
-
-// LevelBasedTreeView.cpp의 ImportXMLToSelectedNode 함수 수정
-
 void SLevelBasedTreeView::ImportXMLToSelectedNode()
 {
     // 선택된 노드 확인
@@ -959,33 +1004,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     }
     
     // 현재 저장된 임포트 설정 가져오기
-    FImportSettings CurrentSettings = UImportSettingsManager::Get()->GetSettings();
-    FImportSettings NewSettings = CurrentSettings;
-    
-    // 설정창 표시 여부 확인 (직접 속성 확인)
-    bool bShowDialog = !CurrentSettings.bDontShowDialogAgain;
-    bool bConfirmed = true;
-    
-    // 설정창 표시 여부 확인
-    if (bShowDialog)
-    {
-        // 임포트 설정 대화상자 표시
-        bConfirmed = ShowImportSettingsDialog(
-            FSlateApplication::Get().GetActiveTopLevelWindow(),
-            FText::FromString(TEXT("3DXML 임포트 설정")),
-            CurrentSettings,
-            NewSettings
-        );
-        
-        if (!bConfirmed)
-        {
-            // 사용자가 취소한 경우
-            return;
-        }
-        
-        // 새 설정 저장
-        UImportSettingsManager::Get()->SaveSettings(NewSettings);
-    }
+    FImportSettings ImportSettings = UImportSettingsManager::Get()->GetSettings();
 
     // 언리얼 프로젝트 루트 디렉토리에 있는 3DXML 폴더 경로 설정 
     FString XMLDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("3DXML"));
@@ -1027,7 +1046,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         FDatasmithSceneManager SceneManager;
         
         // ImportSettings 적용
-        SceneManager.SetImportSettings(NewSettings);
+        SceneManager.SetImportSettings(ImportSettings);
 
         // 이미 임포트된 노드인지 확인
         if (SceneManager.IsAlreadyImportedInLevel(PartNo))
@@ -1052,7 +1071,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
             ImportedParts.Add(PartNo);
             
             // 설정에 따라 마지막으로 처리된 액터 선택
-            if (NewSettings.bSelectActorAfterImport && SelectedItem == SelectedItems.Last())
+            if (ImportSettings.bSelectActorAfterImport && SelectedItem == SelectedItems.Last())
             {
                 GEditor->SelectNone(true, true, false);
                 GEditor->SelectActor(ResultActor, true, true, true);
@@ -1079,7 +1098,7 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
         TreeView->RebuildList();
         
         // 임포트된 마지막 항목을 화면에 표시
-        if (ImportedParts.Num() > 0 && NewSettings.bSelectActorAfterImport)
+        if (ImportedParts.Num() > 0 && ImportSettings.bSelectActorAfterImport)
         {
             FString LastImportedPart = ImportedParts.Last();
             TSharedPtr<FPartTreeItem>* ItemPtr = PartNoToItemMap.Find(LastImportedPart);

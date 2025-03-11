@@ -61,6 +61,9 @@ public:
     /** 선택된 항목 메타데이터 텍스트 반환 */
     FText GetSelectedItemMetadata() const;
     
+    /** 설정 핸들러 **/
+    FReply OnSettingsButtonClicked();
+    
     //===== 선택 및 상호작용 기능 =====//
     
     /** 특정 파트 번호와 일치하는 액터 선택 */

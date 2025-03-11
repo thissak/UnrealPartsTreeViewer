@@ -6,7 +6,6 @@
 
 /**
  * 3DXML 파일 임포트 설정 구조체
- * 3DXML 파일 임포트 시 적용할 옵션들을 관리합니다.
  */
 USTRUCT(BlueprintType)
 struct FImportSettings
@@ -25,10 +24,6 @@ struct FImportSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Import Settings")
 	bool bSelectActorAfterImport = true;
 
-	/** 다시는 설정창 표시하지 않음 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Import Settings")
-	bool bDontShowDialogAgain = false;
-
 	/** 재질 업데이트 방식 
 	 * 0 = 항상 업데이트, 1 = 기존 유지, 2 = 항상 새로 생성 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Import Settings", meta = (ClampMin = "0", ClampMax = "2"))
@@ -41,7 +36,7 @@ struct FImportSettings
 };
 
 /** 임포트 설정 저장 클래스 */
-UCLASS(config = Editor)
+UCLASS(config = EditorPerProjectUserSettings)
 class MYPROJECT2_API UImportSettingsManager : public UObject
 {
 	GENERATED_BODY()

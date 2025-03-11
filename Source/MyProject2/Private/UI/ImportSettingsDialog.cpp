@@ -23,7 +23,7 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
     MaterialUpdateOptions.Add(MakeShareable(new FString(TEXT("Always create new"))));
 
     // 체크박스 위젯 배열 초기화
-    CheckboxWidgets.SetNum(4); // 4개의 체크박스 위젯을 위한 공간 확보
+    CheckboxWidgets.SetNum(3); // 4개의 체크박스 위젯을 위한 공간 확보
 
     ChildSlot
     [
@@ -198,35 +198,6 @@ void SImportSettingsDialog::Construct(const FArguments& InArgs)
                     .OnClicked(this, &SImportSettingsDialog::OnCancelClicked)
                 ]
             ]
-
-            // 첫 번째 구분선 추가
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 10)
-            [
-                SNew(SSeparator)
-                .Thickness(1.0f)
-            ]
-
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0, 5)
-            [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot()
-                .FillWidth(1.0f)
-                [
-                    SNew(STextBlock)
-                    .Text(FText::FromString(TEXT("Don't show this dialog again")))
-                ]
-                + SHorizontalBox::Slot()
-                .AutoWidth()
-                [
-                    SAssignNew(CheckboxWidgets[3], SCheckBox)
-                    .IsChecked(CurrentSettings.bDontShowDialogAgain ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
-                    .OnCheckStateChanged(this, &SImportSettingsDialog::OnCheckboxStateChanged, FName("bDontShowDialogAgain"))
-                ]
-            ]
         ]
     ];
 }
@@ -269,7 +240,6 @@ FReply SImportSettingsDialog::OnResetToDefaultsClicked()
                 case 0: bIsChecked = CurrentSettings.bRemoveTransparentMeshes; break;
                 case 1: bIsChecked = CurrentSettings.bCleanupNonStaticMeshActors; break;
                 case 2: bIsChecked = CurrentSettings.bSelectActorAfterImport; break;
-                case 3: bIsChecked = CurrentSettings.bDontShowDialogAgain; break;
             }
             
             // 체크박스 상태 갱신
@@ -302,10 +272,6 @@ void SImportSettingsDialog::OnCheckboxStateChanged(ECheckBoxState NewState, FNam
     else if (PropertyName == "bSelectActorAfterImport")
     {
         CurrentSettings.bSelectActorAfterImport = bChecked;
-    }
-    else if (PropertyName == "bDontShowDialogAgain")
-    {
-        CurrentSettings.bDontShowDialogAgain = bChecked;
     }
 }
 
