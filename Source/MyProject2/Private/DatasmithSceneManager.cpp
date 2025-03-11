@@ -763,6 +763,109 @@ AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePat
                     CleanupNonStaticMeshActors(TargetActor);
                 }
                 
+                // ----- 피벗 중앙화 로직 추가 시작 -----
+                
+                // StaticMesh 컴포넌트 위치 계산
+                TArray<UStaticMeshComponent*> MeshComponents;
+                FVector TotalPosition(0, 0, 0);
+                int32 MeshCount = 0;
+                
+                // 모든 StaticMeshComponent 찾기 (이미 CleanupNonStaticMeshActors에서 정리되었음)
+                TargetActor->GetComponents<UStaticMeshComponent>(MeshComponents);
+                
+                // 자식 액터의 StaticMeshComponent도 찾기
+                TArray<AActor*> AllChildActors;
+                TargetActor->GetAttachedActors(AllChildActors, true); // 재귀적으로 모든 자식 가져오기
+                
+                // 모든 StaticMeshActor 목록 수집
+                TArray<AStaticMeshActor*> StaticMeshActors;
+                
+                for (AActor* ChildActor : AllChildActors)
+                {
+                    if (AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(ChildActor))
+                    {
+                        StaticMeshActors.Add(MeshActor);
+                        
+                        // 컴포넌트 목록에 추가
+                        if (UStaticMeshComponent* MeshComp = MeshActor->GetStaticMeshComponent())
+                        {
+                            MeshComponents.Add(MeshComp);
+                        }
+                    }
+                }
+                
+                // 컴포넌트 위치 평균 계산
+                for (UStaticMeshComponent* MeshComp : MeshComponents)
+                {
+                    if (MeshComp && MeshComp->IsValidLowLevel())
+                    {
+                        TotalPosition += MeshComp->GetComponentLocation();
+                        MeshCount++;
+                    }
+                }
+                
+                // 메시가 있는 경우에만 피벗 중앙화 수행
+                if (MeshCount > 0)
+                {
+                    // 평균 위치 계산
+                    FVector AveragePosition = TotalPosition / MeshCount;
+                    
+                    // 에디터 트랜잭션 시작
+                    GEditor->BeginTransaction(FText::FromString(TEXT("Center Pivot")));
+                    
+                    UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+                    if (EditorWorld)
+                    {
+                        // 원래 월드 변환 저장
+                        FTransform OriginalTransform = TargetActor->GetActorTransform();
+                        
+                        // 새 루트 컴포넌트가 필요한 경우 생성
+                        USceneComponent* RootComp = TargetActor->GetRootComponent();
+                        if (!RootComp || !RootComp->IsA<UStaticMeshComponent>())
+                        {
+                            // 새 스태틱 메시 컴포넌트 생성
+                            UStaticMeshComponent* NewRootComp = NewObject<UStaticMeshComponent>(TargetActor, UStaticMeshComponent::StaticClass(), TEXT("CenteredRootComp"));
+                            if (NewRootComp)
+                            {
+                                NewRootComp->RegisterComponent();
+                                NewRootComp->SetWorldLocation(AveragePosition);
+                                NewRootComp->SetMobility(EComponentMobility::Static);
+                                NewRootComp->SetVisibility(false);
+                                NewRootComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                                
+                                // 기존 루트 컴포넌트 교체
+                                TargetActor->SetRootComponent(NewRootComp);
+                            }
+                        }
+                        else
+                        {
+                            // 기존 루트 컴포넌트 위치 변경
+                            RootComp->SetWorldLocation(AveragePosition);
+                        }
+                        
+                        // 모든 StaticMeshActor를 새 중심에 맞게 조정
+                        for (AStaticMeshActor* MeshActor : StaticMeshActors)
+                        {
+                            if (!MeshActor) continue;
+                            
+                            // 월드 변환 저장하고 부모 변경
+                            FTransform RelativeTransform = MeshActor->GetActorTransform();
+                            
+                            // 월드 좌표 유지하면서 부모 다시 지정
+                            MeshActor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+                            MeshActor->AttachToActor(TargetActor, FAttachmentTransformRules::KeepWorldTransform);
+                        }
+                        
+                        UE_LOG(LogTemp, Display, TEXT("피벗이 중앙화되었습니다. 메시 개수: %d, 중심 위치: [%.2f, %.2f, %.2f]"), 
+                               MeshCount, AveragePosition.X, AveragePosition.Y, AveragePosition.Z);
+                    }
+                    
+                    // 트랜잭션 종료
+                    GEditor->EndTransaction();
+                }
+                
+                // ----- 피벗 중앙화 로직 추가 끝 -----
+                
                 // 임포트된 노드 관리자에 등록
                 FImportedNodeManager::Get().RegisterImportedNode(PartNo, TargetActor);
                 

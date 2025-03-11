@@ -552,38 +552,6 @@ TSharedPtr<SWidget> SLevelBasedTreeView::OnContextMenuOpening()
                 })
             )
         );
-
-    	// 피벗을 바운딩 박스 중심으로 이동하는 메뉴 항목
-    	MenuBuilder.AddMenuEntry(
-			FText::FromString(TEXT("Move Pivot to Center")),
-			FText::FromString(TEXT("Move the pivot point of the selected actor to the center of its bounding box")),
-			FSlateIcon(),
-			FUIAction(
-				FExecuteAction::CreateLambda([this]() {
-					// 선택된 항목 확인
-					TArray<TSharedPtr<FPartTreeItem>> Items = TreeView->GetSelectedItems();
-					if (Items.Num() > 0)
-					{
-						TSharedPtr<FPartTreeItem> Item = Items[0];
-                
-						// 선택된 노드의 Part No로 액터 찾기
-						SelectActorByPartNo(Item->PartNo);
-                
-						// 피벗 이동 함수 호출
-						FTreeViewUtils::SetActorPivotToCenter();
-					}
-					else
-					{
-						// 선택된 항목이 없으면 현재 선택된 모든 액터에 대해 수행
-						FTreeViewUtils::SetActorPivotToCenter();
-					}
-				}),
-				FCanExecuteAction::CreateLambda([]() { 
-					// 항상 활성화
-					return true; 
-				})
-			)
-		);
     }
     MenuBuilder.EndSection();
 
