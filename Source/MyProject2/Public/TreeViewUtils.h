@@ -141,4 +141,10 @@ public:
 	 * @return 성공 여부
 	 */
 	static bool CalculateSelectedActorMeshBounds(const FString& ActorName = TEXT(""));
+
+	/**
+	 * 선택된 액터의 피벗을 바운딩 박스 중심으로 이동
+	 * @return 성공 여부
+	 */
+	static bool SetActorPivotToCenter();
 };

@@ -3,7 +3,9 @@
 
 #include "TreeViewUtils.h"
 
+#include "ImportedNodeManager.h"
 #include "Selection.h"
+#include "Engine/StaticMeshActor.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "UI/LevelBasedTreeView.h" // FPartTreeItem 구조체 정의를 위해 필요
 #include "Misc/FileHelper.h"
@@ -523,6 +525,207 @@ FString FTreeViewUtils::ExtractPartNoFromAssetName(const FString& AssetName, int
     return TotalActorsScanned > 0 && TotalComponentsFound > 0;
 #else
     UE_LOG(LogTemp, Warning, TEXT("이 기능은 에디터에서만 사용 가능합니다."));
+    return false;
+#endif
+}
+
+bool FTreeViewUtils::SetActorPivotToCenter()
+{
+#if WITH_EDITOR
+    if (!GEditor)
+        return false;
+    
+    // 현재 선택된 액터 가져오기
+    USelection* SelectedActors = GEditor->GetSelectedActors();
+    if (!SelectedActors || SelectedActors->Num() == 0)
+    {
+        FNotificationInfo Info(FText::FromString(TEXT("선택된 액터가 없습니다. 액터를 선택해주세요.")));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
+        return false;
+    }
+    
+    // 메시 위치 계산 및 StaticMeshActor 찾기
+    FVector TotalPosition(0, 0, 0);
+    int32 MeshCount = 0;
+    AActor* FirstActor = nullptr;
+    TArray<AStaticMeshActor*> StaticMeshActors;
+    
+    // 선택된 모든 액터 및 그 자식들의 메시 컴포넌트 위치 계산
+    for (FSelectionIterator It(*SelectedActors); It; ++It)
+    {
+        AActor* Actor = Cast<AActor>(*It);
+        if (!Actor) continue;
+        
+        if (!FirstActor) FirstActor = Actor;
+        
+        // StaticMeshActor 수집
+        if (AStaticMeshActor* StaticMeshActor = Cast<AStaticMeshActor>(Actor))
+            StaticMeshActors.Add(StaticMeshActor);
+        
+        // 메시 컴포넌트 위치 계산
+        TArray<UStaticMeshComponent*> MeshComponents;
+        Actor->GetComponents<UStaticMeshComponent>(MeshComponents);
+        
+        // 자식 액터들도 포함
+        TArray<AActor*> ChildActors;
+        Actor->GetAttachedActors(ChildActors, true);
+        
+        for (AActor* ChildActor : ChildActors)
+        {
+            if (!ChildActor) continue;
+            
+            if (AStaticMeshActor* ChildStaticMeshActor = Cast<AStaticMeshActor>(ChildActor))
+                StaticMeshActors.Add(ChildStaticMeshActor);
+            
+            TArray<UStaticMeshComponent*> ChildComponents;
+            ChildActor->GetComponents<UStaticMeshComponent>(ChildComponents);
+            MeshComponents.Append(ChildComponents);
+        }
+        
+        // 모든 메시 컴포넌트의 위치 합산
+        for (UStaticMeshComponent* MeshComp : MeshComponents)
+        {
+            if (MeshComp && MeshComp->IsValidLowLevel())
+            {
+                TotalPosition += MeshComp->GetComponentLocation();
+                MeshCount++;
+            }
+        }
+    }
+    
+    // 메시가 하나도 없으면 실패
+    if (MeshCount == 0)
+    {
+        FNotificationInfo Info(FText::FromString(TEXT("메시 컴포넌트가 하나도 없습니다.")));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
+        return false;
+    }
+    
+    // 평균 위치 계산
+    FVector AveragePosition = TotalPosition / MeshCount;
+    
+    // 에디터 트랜잭션 시작
+    GEditor->BeginTransaction(FText::FromString(TEXT("Create Center Actor")));
+    
+    UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+    if (!EditorWorld)
+    {
+        GEditor->EndTransaction();
+        return false;
+    }
+    
+    // 첫 번째 액터의 정보 저장
+    FString OriginalLabel;
+    TArray<FName> OriginalTags;
+    
+    if (FirstActor)
+    {
+        OriginalLabel = FirstActor->GetActorLabel();
+        OriginalTags = FirstActor->Tags;
+    }
+    
+    // 새 액터 생성
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Name = *FString::Printf(TEXT("MeshCenter_%d"), FMath::RandRange(0, 9999));
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+    
+    AActor* NewActor = EditorWorld->SpawnActor<AActor>(AActor::StaticClass(), FTransform(AveragePosition), SpawnParams);
+    
+    if (NewActor)
+    {
+        // 스태틱 루트 컴포넌트 생성
+        UStaticMeshComponent* RootComp = NewObject<UStaticMeshComponent>(NewActor, UStaticMeshComponent::StaticClass(), TEXT("RootComp"));
+        if (RootComp)
+        {
+            RootComp->RegisterComponent();
+            NewActor->SetRootComponent(RootComp);
+            RootComp->SetWorldLocation(AveragePosition);
+            RootComp->SetMobility(EComponentMobility::Static);
+            RootComp->SetVisibility(false);
+            RootComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        }
+        
+        // StaticMeshActor들을 새 부모에 연결
+        int32 AttachedCount = 0;
+        for (AStaticMeshActor* MeshActor : StaticMeshActors)
+        {
+            if (!MeshActor) continue;
+            
+            MeshActor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+            MeshActor->AttachToActor(NewActor, FAttachmentTransformRules::KeepWorldTransform);
+            
+            if (MeshActor->GetAttachParentActor() == NewActor)
+                AttachedCount++;
+        }
+        
+        // 원본 액터 삭제 및 태그 복사
+        if (FirstActor && AttachedCount > 0)
+        {
+            // 태그 복사
+            for (const FName& Tag : OriginalTags)
+                NewActor->Tags.Add(Tag);
+            
+            // 라벨 설정
+            NewActor->SetActorLabel(*OriginalLabel);
+            
+            // ImportedNodeManager에 등록 정보 업데이트
+            bool bWasImported = FirstActor->ActorHasTag(FImportedNodeManager::ImportedTag);
+            
+            if (bWasImported)
+            {
+                // 파트 번호 추출 - "ImportedPart_파트번호" 형식의 태그를 찾음
+                FString PartNo;
+                for (const FName& Tag : OriginalTags)
+                {
+                    FString TagStr = Tag.ToString();
+                    if (TagStr.StartsWith(TEXT("ImportedPart_")))
+                    {
+                        // 접두사 제거하여 파트 번호 추출
+                        PartNo = TagStr.RightChop(13); // "ImportedPart_" 길이는 13
+                        break;
+                    }
+                }
+                
+                // 파트 번호가 확인되면 매니저에 새 액터 등록
+                if (!PartNo.IsEmpty())
+                {
+                    // 원본 매핑 제거 후 새 액터 등록
+                    FImportedNodeManager::Get().RemoveImportedNode(PartNo);
+                    FImportedNodeManager::Get().RegisterImportedNode(PartNo, NewActor);
+                }
+            }
+            
+            // 원본 액터 제거
+            FirstActor->Destroy();
+        }
+        else
+        {
+            NewActor->SetActorLabel(TEXT("MeshCenter"));
+        }
+        
+        // 알림 표시
+        FString NotificationText = FString::Printf(
+            TEXT("메시 중심에 '%s' 액터가 생성되었습니다. %d개의 StaticMeshActor가 연결되었습니다."),
+            *NewActor->GetActorLabel(), AttachedCount);
+            
+        FNotificationInfo Info(FText::FromString(NotificationText));
+        Info.ExpireDuration = 5.0f;
+        Info.bUseSuccessFailIcons = true;
+        
+        TSharedPtr<SNotificationItem> NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
+        if (NotificationItem.IsValid())
+            NotificationItem->SetCompletionState(SNotificationItem::CS_Success);
+        
+        // 생성된 액터 선택
+        GEditor->SelectNone(false, true);
+        GEditor->SelectActor(NewActor, true, true);
+    }
+    
+    GEditor->EndTransaction();
+    return NewActor != nullptr;
+#else
     return false;
 #endif
 }
