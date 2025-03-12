@@ -552,42 +552,6 @@ void SLevelBasedTreeView::OnDuplicateFilterCheckedChanged(ECheckBoxState NewStat
 		bEnable ? TEXT("활성화") : TEXT("비활성화"));
 }
 
-// 임포트된 노드 필터 활성화/비활성화 함수
-void SLevelBasedTreeView::ToggleImportedNodesFiltering(bool bEnable)
-{
-	// 이미 같은 상태면 아무것도 하지 않음
-	if (FilterManager->IsFilterEnabled("ImportedNodeFilter") == bEnable) { return; }
-        
-	FilterManager->SetFilterEnabled("ImportedNodeFilter", bEnable);
-    
-	UE_LOG(LogTemp, Display, TEXT("임포트된 노드 필터링 %s: 임포트된 노드 %d개"), 
-		bEnable ? TEXT("활성화") : TEXT("비활성화"), FImportedNodeManager::Get().GetImportedNodeCount());
-    
-	// 트리뷰 갱신 (필터링 적용)
-	if (TreeView.IsValid())
-	{
-		TreeView->RequestTreeRefresh();
-	}
-}
-
-// 중복 노드 필터 활성화/비활성화 함수
-void SLevelBasedTreeView::ToggleDuplicateFiltering(bool bEnable)
-{
-	// 이미 같은 상태면 아무것도 하지 않음
-	if (FilterManager->IsFilterEnabled("중복 노드 제거") == bEnable) { return; }
-        
-	FilterManager->SetFilterEnabled("중복 노드 제거", bEnable);
-    
-	UE_LOG(LogTemp, Display, TEXT("중복 노드 필터링 %s"), 
-		bEnable ? TEXT("활성화") : TEXT("비활성화"));
-    
-	// 트리뷰 갱신 (필터링 적용)
-	if (TreeView.IsValid())
-	{
-		TreeView->RequestTreeRefresh();
-	}
-}
-
 // 검색 텍스트 확정 이벤트 핸들러
 void SLevelBasedTreeView::OnSearchTextCommitted(const FText& InText, ETextCommit::Type CommitType)
 {
@@ -875,6 +839,43 @@ void SLevelBasedTreeView::ToggleImageFiltering(bool bEnable)
         bEnable ? TEXT("활성화") : TEXT("비활성화"), FServiceLocator::GetImageManager()->GetPartsWithImageSet().Num());
     
     // OnGetChildren 함수에서 필터링하도록 트리뷰 갱신만 요청
+    if (TreeView.IsValid())
+    {
+        TreeView->RequestTreeRefresh();
+    }
+}
+
+
+// 임포트된 노드 필터 활성화/비활성화 함수
+void SLevelBasedTreeView::ToggleImportedNodesFiltering(bool bEnable)
+{
+    // 이미 같은 상태면 아무것도 하지 않음
+    if (FilterManager->IsFilterEnabled("ImportedNodeFilter") == bEnable) { return; }
+        
+    FilterManager->SetFilterEnabled("ImportedNodeFilter", bEnable);
+    
+    UE_LOG(LogTemp, Display, TEXT("임포트된 노드 필터링 %s: 임포트된 노드 %d개"), 
+        bEnable ? TEXT("활성화") : TEXT("비활성화"), FImportedNodeManager::Get().GetImportedNodeCount());
+    
+    // 트리뷰 갱신 (필터링 적용)
+    if (TreeView.IsValid())
+    {
+        TreeView->RequestTreeRefresh();
+    }
+}
+
+// 중복 노드 필터 활성화/비활성화 함수
+void SLevelBasedTreeView::ToggleDuplicateFiltering(bool bEnable)
+{
+    // 이미 같은 상태면 아무것도 하지 않음
+    if (FilterManager->IsFilterEnabled("중복 노드 제거") == bEnable) { return; }
+        
+    FilterManager->SetFilterEnabled("중복 노드 제거", bEnable);
+    
+    UE_LOG(LogTemp, Display, TEXT("중복 노드 필터링 %s"), 
+        bEnable ? TEXT("활성화") : TEXT("비활성화"));
+    
+    // 트리뷰 갱신 (필터링 적용)
     if (TreeView.IsValid())
     {
         TreeView->RequestTreeRefresh();
@@ -1171,22 +1172,17 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
 			}
 		}
 	}
-	else if (FilterManager->IsFilterEnabled("ImageFilter"))
-	{
-		// 이미지 필터링
-		for (const auto& Child : Item->Children)
-		{
-			// 필터 관리자의 PassesAllFilters 함수를 사용하여 확인
-			if (FilterManager->PassesAllFilters(Child))
-			{
-				OutChildren.Add(Child);
-			}
-		}
-	}
 	else
 	{
-		// 필터링 없이 모든 자식 항목 표시
-		OutChildren = Item->Children;
+	    // 이미지 필터링
+	    for (const auto& Child : Item->Children)
+	    {
+	        // 필터 관리자의 PassesAllFilters 함수를 사용하여 확인
+	        if (FilterManager->PassesAllFilters(Child))
+	        {
+	            OutChildren.Add(Child);
+	        }
+	    }
 	}
 }
 
