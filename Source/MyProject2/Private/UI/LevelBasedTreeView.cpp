@@ -169,6 +169,34 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
             .Text(FText::FromString(TEXT("Show Only Nodes with Images"))) // 오타 수정: Imaage -> Image
         ]
     ];
+
+	// 임포트된 노드 필터 체크박스 추가
+	FilterPanel->AddSlot()
+	.AutoHeight()
+	.Padding(4, 2, 0, 2)
+	[
+		SAssignNew(ImportedNodesFilterCheckbox, SCheckBox)
+		.IsChecked(FilterManager->IsFilterEnabled("ImportedNodeFilter") ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+		.OnCheckStateChanged(this, &SLevelBasedTreeView::OnImportedNodesFilterCheckedChanged)
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString(TEXT("Show Only Imported Nodes")))
+		]
+	];
+    
+	// 중복 노드 필터 체크박스 추가
+	FilterPanel->AddSlot()
+	.AutoHeight()
+	.Padding(4, 2, 0, 2)
+	[
+		SAssignNew(DuplicateFilterCheckbox, SCheckBox)
+		.IsChecked(FilterManager->IsFilterEnabled("중복 노드 제거") ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+		.OnCheckStateChanged(this, &SLevelBasedTreeView::OnDuplicateFilterCheckedChanged)
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString(TEXT("Remove Duplicate Nodes")))
+		]
+	];
     
     // 필터 초기화 버튼 추가
     /*FilterPanel->AddSlot()
@@ -500,6 +528,64 @@ void SLevelBasedTreeView::FoldLevelZeroItems()
     {
         TreeView->RequestTreeRefresh();
     }
+}
+
+// 임포트된 노드 필터 체크박스 변경 이벤트 핸들러
+void SLevelBasedTreeView::OnImportedNodesFilterCheckedChanged(ECheckBoxState NewState)
+{
+	// 체크박스 상태에 따라 임포트된 노드 필터 활성화/비활성화
+	bool bEnable = (NewState == ECheckBoxState::Checked);
+	ToggleImportedNodesFiltering(bEnable);
+    
+	UE_LOG(LogTemp, Display, TEXT("임포트된 노드 필터 %s: 체크박스 변경 이벤트"), 
+		bEnable ? TEXT("활성화") : TEXT("비활성화"));
+}
+
+// 중복 노드 필터 체크박스 변경 이벤트 핸들러
+void SLevelBasedTreeView::OnDuplicateFilterCheckedChanged(ECheckBoxState NewState)
+{
+	// 체크박스 상태에 따라 중복 노드 필터 활성화/비활성화
+	bool bEnable = (NewState == ECheckBoxState::Checked);
+	ToggleDuplicateFiltering(bEnable);
+    
+	UE_LOG(LogTemp, Display, TEXT("중복 노드 필터 %s: 체크박스 변경 이벤트"), 
+		bEnable ? TEXT("활성화") : TEXT("비활성화"));
+}
+
+// 임포트된 노드 필터 활성화/비활성화 함수
+void SLevelBasedTreeView::ToggleImportedNodesFiltering(bool bEnable)
+{
+	// 이미 같은 상태면 아무것도 하지 않음
+	if (FilterManager->IsFilterEnabled("ImportedNodeFilter") == bEnable) { return; }
+        
+	FilterManager->SetFilterEnabled("ImportedNodeFilter", bEnable);
+    
+	UE_LOG(LogTemp, Display, TEXT("임포트된 노드 필터링 %s: 임포트된 노드 %d개"), 
+		bEnable ? TEXT("활성화") : TEXT("비활성화"), FImportedNodeManager::Get().GetImportedNodeCount());
+    
+	// 트리뷰 갱신 (필터링 적용)
+	if (TreeView.IsValid())
+	{
+		TreeView->RequestTreeRefresh();
+	}
+}
+
+// 중복 노드 필터 활성화/비활성화 함수
+void SLevelBasedTreeView::ToggleDuplicateFiltering(bool bEnable)
+{
+	// 이미 같은 상태면 아무것도 하지 않음
+	if (FilterManager->IsFilterEnabled("중복 노드 제거") == bEnable) { return; }
+        
+	FilterManager->SetFilterEnabled("중복 노드 제거", bEnable);
+    
+	UE_LOG(LogTemp, Display, TEXT("중복 노드 필터링 %s"), 
+		bEnable ? TEXT("활성화") : TEXT("비활성화"));
+    
+	// 트리뷰 갱신 (필터링 적용)
+	if (TreeView.IsValid())
+	{
+		TreeView->RequestTreeRefresh();
+	}
 }
 
 // 검색 텍스트 확정 이벤트 핸들러

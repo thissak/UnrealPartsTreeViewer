@@ -83,15 +83,29 @@ private:
     bool bShowFilterPanel;
     TSharedPtr<SBorder> FilterPanelWidget;
     TSharedPtr<SCheckBox> ImageFilterCheckbox;
+    TSharedPtr<SCheckBox> ImportedNodesFilterCheckbox;
+    TSharedPtr<SCheckBox> DuplicateFilterCheckbox;
     
     // 필터 버튼 클릭 이벤트 핸들러
     FReply OnFilterButtonClicked();
     
     // 필터 초기화 버튼 클릭 이벤트 핸들러
     FReply OnResetFiltersClicked();
+
+	// 이미지 필터 체크박스 변경 이벤트 핸들러
+	void OnImageFilterCheckedChanged(ECheckBoxState NewState);
     
-    // 이미지 필터 체크박스 변경 이벤트 핸들러
-    void OnImageFilterCheckedChanged(ECheckBoxState NewState);
+	// 임포트된 노드 필터 체크박스 변경 이벤트 핸들러
+	void OnImportedNodesFilterCheckedChanged(ECheckBoxState NewState);
+    
+	// 중복 노드 필터 체크박스 변경 이벤트 핸들러
+	void OnDuplicateFilterCheckedChanged(ECheckBoxState NewState);
+    
+	// 임포트된 노드 필터 활성화/비활성화
+	void ToggleImportedNodesFiltering(bool bEnable);
+    
+	// 중복 노드 필터 활성화/비활성화
+	void ToggleDuplicateFiltering(bool bEnable);
     
     /** 레벨 0 항목들을 접는 헬퍼 함수 */
     void FoldLevelZeroItems();
