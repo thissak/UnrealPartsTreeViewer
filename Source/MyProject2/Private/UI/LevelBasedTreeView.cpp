@@ -166,12 +166,12 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
         .OnCheckStateChanged(this, &SLevelBasedTreeView::OnImageFilterCheckedChanged)
         [
             SNew(STextBlock)
-            .Text(FText::FromString(TEXT("Image"))) // 오타 수정: Imaage -> Image
+            .Text(FText::FromString(TEXT("Show Only Nodes with Images"))) // 오타 수정: Imaage -> Image
         ]
     ];
     
     // 필터 초기화 버튼 추가
-    FilterPanel->AddSlot()
+    /*FilterPanel->AddSlot()
     .AutoHeight()
     .Padding(4, 4, 0, 2)
     .HAlign(HAlign_Left)
@@ -179,7 +179,7 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
         SNew(SButton)
         .Text(FText::FromString(TEXT("Reset")))
         .OnClicked(this, &SLevelBasedTreeView::OnResetFiltersClicked)
-    ];
+    ];*/
     
     // 필터 패널을 Border 위젯으로 감싸서 가시성 제어할 수 있게 함
     TSharedRef<SBorder> FilterPanelBorder = SNew(SBorder)
