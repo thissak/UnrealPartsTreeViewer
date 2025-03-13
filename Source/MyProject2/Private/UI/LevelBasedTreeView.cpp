@@ -190,7 +190,7 @@ TSharedRef<SWidget> SLevelBasedTreeView::GetSearchWidget()
 	.Padding(4, 2, 0, 2)
 	[
 		SAssignNew(DuplicateFilterCheckbox, SCheckBox)
-		.IsChecked(FilterManager->IsFilterEnabled("중복 노드 제거") ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+		.IsChecked(FilterManager->IsFilterEnabled("RemoveDuplicatedNode") ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
 		.OnCheckStateChanged(this, &SLevelBasedTreeView::OnDuplicateFilterCheckedChanged)
 		[
 			SNew(STextBlock)
@@ -868,9 +868,9 @@ void SLevelBasedTreeView::ToggleImportedNodesFiltering(bool bEnable)
 void SLevelBasedTreeView::ToggleDuplicateFiltering(bool bEnable)
 {
     // 이미 같은 상태면 아무것도 하지 않음
-    if (FilterManager->IsFilterEnabled("중복 노드 제거") == bEnable) { return; }
+    if (FilterManager->IsFilterEnabled("RemoveDuplicatedNode") == bEnable) { return; }
         
-    FilterManager->SetFilterEnabled("중복 노드 제거", bEnable);
+    FilterManager->SetFilterEnabled("RemoveDuplicatedNode", bEnable);
     
     UE_LOG(LogTemp, Display, TEXT("중복 노드 필터링 %s"), 
         bEnable ? TEXT("활성화") : TEXT("비활성화"));
@@ -1174,7 +1174,7 @@ void SLevelBasedTreeView::OnGetChildren(TSharedPtr<FPartTreeItem> Item, TArray<T
 	}
 	else
 	{
-	    // 이미지 필터링
+	    // 필터링
 	    for (const auto& Child : Item->Children)
 	    {
 	        // 필터 관리자의 PassesAllFilters 함수를 사용하여 확인

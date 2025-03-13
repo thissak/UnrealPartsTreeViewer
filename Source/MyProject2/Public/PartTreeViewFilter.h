@@ -92,7 +92,7 @@ class FDuplicateFilter : public IPartTreeViewFilter
 public:
     FDuplicateFilter() {}
 
-    virtual FString GetFilterName() const override { return TEXT("중복 노드 제거"); }
+    virtual FString GetFilterName() const override { return TEXT("RemoveDuplicatedNode"); }
     virtual FString GetFilterDescription() const override { return TEXT("중복된 파트 번호를 필터링합니다"); }
 
     virtual bool PassesFilter(const TSharedPtr<FPartTreeItem>& Item) const override;
