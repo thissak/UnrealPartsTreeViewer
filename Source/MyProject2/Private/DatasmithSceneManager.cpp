@@ -764,9 +764,23 @@ AActor* FDatasmithSceneManager::ImportAndProcessDatasmith(const FString& FilePat
 
                     CenterActorPivot(TargetActor);
                 }
-                
-                // 임포트된 노드 관리자에 등록
-                FImportedNodeManager::Get().RegisterImportedNode(PartNo, TargetActor);
+            	
+            	// Undo 시스템에 액터 등록 (CenterActorPivot 함수 호출 후)
+            	TargetActor->SetFlags(RF_Transactional);
+
+            	// 액터의 모든 컴포넌트도 Transactional 플래그 설정
+            	TArray<UActorComponent*> Components;
+            	TargetActor->GetComponents(Components);
+            	for (UActorComponent* Component : Components)
+            	{
+            		if (Component)
+            		{
+            			Component->SetFlags(RF_Transactional);
+            		}
+            	}
+
+            	// 임포트된 노드 관리자에 등록
+            	FImportedNodeManager::Get().RegisterImportedNode(PartNo, TargetActor);
                 
                 // DatasmithSceneActor 제거
                 UE_LOG(LogTemp, Display, TEXT("DatasmithSceneActor 제거: %s"), *SceneActor->GetName());
