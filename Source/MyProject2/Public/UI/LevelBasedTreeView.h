@@ -71,6 +71,13 @@ public:
     
     /** 선택된 노드에 3DXML 파일 임포트 */
 	void ImportXMLToSelectedNode();
+	
+	/**
+	 * 파트 번호로 노드 선택
+	 * @param PartNo - 선택할 노드의 파트 번호
+	 * @return 노드 선택 성공 여부
+	 */
+	bool SelectNodeByPartNo(const FString& PartNo);
 
 private:
     //===== 검색 관련 변수 =====//

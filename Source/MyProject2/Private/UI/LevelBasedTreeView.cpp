@@ -1396,6 +1396,42 @@ void SLevelBasedTreeView::ImportXMLToSelectedNode()
     }
 }
 
+bool SLevelBasedTreeView::SelectNodeByPartNo(const FString& PartNo)
+{
+    if (!TreeView.IsValid() || PartNo.IsEmpty())
+    {
+        return false;
+    }
+    
+    // 파트 번호로 항목 검색
+    TSharedPtr<FPartTreeItem>* ItemPtr = PartNoToItemMap.Find(PartNo);
+    if (!ItemPtr || !ItemPtr->IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("파트 번호 '%s'에 해당하는 노드를 찾을 수 없습니다."), *PartNo);
+        return false;
+    }
+    
+    TSharedPtr<FPartTreeItem> Item = *ItemPtr;
+    
+    // 노드의 경로 펼치기
+    ExpandPathToItem(Item);
+    
+    // 노드 선택 및 스크롤
+    TreeView->SetItemSelection(Item, true);
+    TreeView->RequestScrollIntoView(Item);
+    
+    // 노드 정보 로그 출력
+    UE_LOG(LogTemp, Display, TEXT("파트 번호 '%s'에 해당하는 노드를 선택했습니다. (PartNo=%s, Level=%d)"), 
+           *PartNo, *Item->PartNo, Item->Level);
+    
+    // 메타데이터 위젯 업데이트 (선택 이벤트를 통해 자동으로 이루어짐)
+    if (MetadataWidget.IsValid())
+    {
+        MetadataWidget->SetSelectedItem(Item);
+    }
+    
+    return true;
+}
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 // 트리뷰 위젯 생성 헬퍼 함수
