@@ -28,6 +28,15 @@ public:
         SLATE_ARGUMENT(TSharedPtr<SPartMetadataWidget>, MetadataWidget) // 메타데이터 위젯
     SLATE_END_ARGS()
 
+	// 싱글톤 인스턴스 가져오기
+	static TSharedPtr<SLevelBasedTreeView> Get();
+    
+	// 싱글톤 인스턴스 설정
+	static void Initialize(TSharedPtr<SLevelBasedTreeView> InInstance);
+    
+	// 싱글톤 인스턴스 정리
+	static void Shutdown();
+
     //===== 초기화 및 기본 설정 =====//
     
     /** 위젯 생성 함수 */
@@ -80,6 +89,9 @@ public:
 	bool SelectNodeByPartNo(const FString& PartNo);
 
 private:
+	// 싱글톤 인스턴스
+	static TSharedPtr<SLevelBasedTreeView> Instance;
+	
     //===== 검색 관련 변수 =====//
     FString SearchText;               // 현재 검색어
     FTimerHandle ExpandTimerHandle;   // 확장 타이머

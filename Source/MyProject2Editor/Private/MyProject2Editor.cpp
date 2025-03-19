@@ -25,7 +25,6 @@
 // 정적 멤버 변수 초기화
 FLevelEditorModule::FLevelViewportMenuExtender_SelectedActors FMyProject2EditorModule::LevelEditorMenuExtenderDelegate;
 FDelegateHandle FMyProject2EditorModule::LevelEditorExtenderDelegateHandle;
-TSharedPtr<SLevelBasedTreeView> FMyProject2EditorModule::TreeViewInstance = nullptr;
 
 // 도킹 탭 ID 정의
 static const FName PartsTreeTabId = FName("PartsTree");
@@ -53,8 +52,8 @@ void FMyProject2EditorModule::StartupModule()
 
 void FMyProject2EditorModule::ShutdownModule()
 {
-    // 트리뷰 레퍼런스 해제
-    TreeViewInstance = nullptr;
+    // 트리뷰 싱글톤 인스턴스 정리
+    SLevelBasedTreeView::Shutdown();
     
     // 도구 메뉴 등록 해제
     UToolMenus::UnregisterOwner(this);
@@ -127,17 +126,16 @@ TSharedRef<SDockTab> FMyProject2EditorModule::SpawnPartsTreeTab(const FSpawnTabA
     TSharedPtr<SWidget> TreeViewWidget;
     TSharedPtr<SWidget> MetadataWidget;
     CreateLevelBasedTreeView(TreeViewWidget, MetadataWidget, CSVFilePath);
-
-    // TreeViewInstance 설정
-    if (TreeViewWidget.IsValid())
+    
+    // 로그 확인 - 싱글톤 인스턴스가 제대로 초기화되었는지 확인
+    TSharedPtr<SLevelBasedTreeView> TreeViewInstance = SLevelBasedTreeView::Get();
+    if (TreeViewInstance.IsValid())
     {
-        // SLevelBasedTreeView 타입으로 캐스팅하여 저장
-        TSharedPtr<SLevelBasedTreeView> TypedTreeView = StaticCastSharedPtr<SLevelBasedTreeView>(TreeViewWidget);
-        if (TypedTreeView.IsValid())
-        {
-            SetTreeViewInstance(TypedTreeView);
-            UE_LOG(LogTemp, Display, TEXT("트리뷰 인스턴스가 성공적으로 등록되었습니다."));
-        }
+        UE_LOG(LogTemp, Display, TEXT("트리뷰 싱글톤 인스턴스가 성공적으로 초기화되었습니다."));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("트리뷰 싱글톤 인스턴스가 초기화되지 않았습니다."));
     }
 
     TSharedRef<SWidget> ContentWidget = SNew(SSplitter)
@@ -159,18 +157,6 @@ TSharedRef<SDockTab> FMyProject2EditorModule::SpawnPartsTreeTab(const FSpawnTabA
         [
             ContentWidget
         ];
-}
-
-// 트리뷰 위젯 레퍼런스 설정 함수
-void FMyProject2EditorModule::SetTreeViewInstance(TSharedPtr<SLevelBasedTreeView> InTreeView)
-{
-    TreeViewInstance = InTreeView;
-}
-
-// 트리뷰 위젯 레퍼런스 가져오기 함수
-TSharedPtr<SLevelBasedTreeView> FMyProject2EditorModule::GetTreeViewInstance()
-{
-    return TreeViewInstance;
 }
 
 // 에디터 메뉴 확장 기능 설치
@@ -367,6 +353,9 @@ void FMyProject2EditorModule::ShowSelectedActorMetadata()
 // 트리뷰에서 노드 선택 기능
 void FMyProject2EditorModule::SelectTreeNodeForActor()
 {
+    // 싱글톤 인스턴스 사용
+    TSharedPtr<SLevelBasedTreeView> TreeViewInstance = SLevelBasedTreeView::Get();
+    
     // 트리뷰 인스턴스 확인
     if (!TreeViewInstance.IsValid())
     {
@@ -413,12 +402,10 @@ void FMyProject2EditorModule::SelectTreeNodeForActor()
         FSlateNotificationManager::Get().AddNotification(Info);
     }
     
+    UE_LOG(LogTemp, Display, TEXT("액터 '%s'에 대한 파트 번호: %s"), *Actor->GetName(), *PartNo);
+    
     // 트리뷰에서 노드 선택 시도
-    bool bSuccess = false;
-    if (TreeViewInstance.IsValid())
-    {
-        bSuccess = TreeViewInstance->SelectNodeByPartNo(PartNo);
-    }
+    bool bSuccess = TreeViewInstance->SelectNodeByPartNo(PartNo);
     
     // 결과 알림
     if (bSuccess)

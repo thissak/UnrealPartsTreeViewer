@@ -30,6 +30,29 @@
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
+// SLevelBasedTreeView.cpp
+
+// 정적 멤버 초기화
+TSharedPtr<SLevelBasedTreeView> SLevelBasedTreeView::Instance = nullptr;
+
+TSharedPtr<SLevelBasedTreeView> SLevelBasedTreeView::Get()
+{
+    return Instance;
+}
+
+void SLevelBasedTreeView::Initialize(TSharedPtr<SLevelBasedTreeView> InInstance)
+{
+    Instance = InInstance;
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 싱글톤 인스턴스 초기화 - PartNoToItemMap 크기: %d"), 
+           Instance.IsValid() ? Instance->PartNoToItemMap.Num() : 0);
+}
+
+void SLevelBasedTreeView::Shutdown()
+{
+    Instance = nullptr;
+    UE_LOG(LogTemp, Display, TEXT("트리뷰 싱글톤 인스턴스 정리"));
+}
+
 void SLevelBasedTreeView::Construct(const FArguments& InArgs)
 {
     // 기본 변수 초기화
@@ -1171,6 +1194,9 @@ void CreateLevelBasedTreeView(TSharedPtr<SWidget>& OutTreeViewWidget, TSharedPtr
     TSharedPtr<SLevelBasedTreeView> TreeView = SNew(SLevelBasedTreeView)
         .ExcelFilePath(ExcelFilePath)
         .MetadataWidget(MetadataWidget);
+    
+    // 싱글톤으로 설정
+    SLevelBasedTreeView::Initialize(TreeView);
     
     OutTreeViewWidget = SNew(SVerticalBox)
         // 검색 위젯 추가
