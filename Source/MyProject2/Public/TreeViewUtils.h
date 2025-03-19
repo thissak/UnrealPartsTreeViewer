@@ -44,6 +44,16 @@ class MYPROJECT2_API FTreeViewUtils
 {
 public:
 	/**
+	 * 선택된 노드에 3DXML 파일 임포트
+	 * @param SelectedItems - 선택된 트리 항목 배열
+	 * @param PartNoToItemMap - 파트 번호별 항목 맵
+	 * @return 임포트 처리된 항목 수
+	 */
+	static int32 ImportXMLToSelectedNodes(
+		const TArray<TSharedPtr<FPartTreeItem>>& SelectedItems,
+		const TMap<FString, TSharedPtr<FPartTreeItem>>& PartNoToItemMap);
+	
+	/**
 	 * CSV 파일 읽기 함수
 	 * @param FilePath - CSV 파일 경로
 	 * @param OutRows - 읽은 CSV 데이터를 저장할 배열
