@@ -206,8 +206,8 @@ TSharedRef<FExtender> FMyProject2EditorModule::OnExtendLevelEditorMenu(const TSh
                 // 메타데이터 출력 메뉴 항목
                 FUIAction Action_ShowMetadata(FExecuteAction::CreateStatic(&FMyProject2EditorModule::ShowSelectedActorMetadata));
                 MenuBuilder.AddMenuEntry(
-                    LOCTEXT("ShowActorMetadata", "로그에 액터 메타데이터 출력"),
-                    LOCTEXT("ShowActorMetadata_Tooltip", "선택된 액터의 메타데이터를 로그에 출력합니다"),
+                    LOCTEXT("ShowActorMetadata", "로그에 메타데이터 출력"),
+                    LOCTEXT("ShowActorMetadata_Tooltip", "선택된 노드의 메타데이터를 로그에 출력합니다"),
                     FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Details"),
                     Action_ShowMetadata);
                 
@@ -218,7 +218,7 @@ TSharedRef<FExtender> FMyProject2EditorModule::OnExtendLevelEditorMenu(const TSh
                 MenuBuilder.AddMenuEntry(
                     LOCTEXT("CalculateBounds", "메시 바운딩 박스 계산"),
                     LOCTEXT("CalculateBounds_Tooltip", "선택된 액터의 메시 바운딩 박스를 계산합니다"),
-                    FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.BoundingBox"),
+                    FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Cube"),
                     Action_CalculateBounds);
                 
                 // 트리뷰에서 노드 선택 메뉴 항목
@@ -243,108 +243,82 @@ void FMyProject2EditorModule::ShowSelectedActorMetadata()
     USelection* SelectedActors = GEditor->GetSelectedActors();
     if (!SelectedActors || SelectedActors->Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("선택된 액터 없음"));
+        // 선택된 액터가 없는 경우
+        FNotificationInfo Info(FText::FromString(TEXT("선택된 액터가 없습니다. 액터를 선택해주세요.")));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
         return;
     }
     
-    UE_LOG(LogTemp, Display, TEXT("=== 선택된 액터의 메타데이터 출력 시작 ==="));
+    // 첫 번째 선택된 액터에 대해서만 처리
+    AActor* SelectedActor = Cast<AActor>(SelectedActors->GetSelectedObject(0));
+    if (!SelectedActor)
+        return;
     
-    for (FSelectionIterator It(*SelectedActors); It; ++It)
+    // 파트 번호 찾기
+    FString PartNo;
+    for (const FName& Tag : SelectedActor->Tags)
     {
-        AActor* Actor = Cast<AActor>(*It);
-        if (!Actor) continue;
-        
-        UE_LOG(LogTemp, Display, TEXT("액터: %s (클래스: %s)"), 
-               *Actor->GetActorLabel(), *Actor->GetClass()->GetName());
-        
-        // 위치, 회전, 스케일 정보
-        FVector Location = Actor->GetActorLocation();
-        FRotator Rotation = Actor->GetActorRotation();
-        FVector Scale = Actor->GetActorScale3D();
-        
-        UE_LOG(LogTemp, Display, TEXT("  위치: X=%.2f Y=%.2f Z=%.2f"), 
-               Location.X, Location.Y, Location.Z);
-        UE_LOG(LogTemp, Display, TEXT("  회전: P=%.2f Y=%.2f R=%.2f"), 
-               Rotation.Pitch, Rotation.Yaw, Rotation.Roll);
-        UE_LOG(LogTemp, Display, TEXT("  스케일: X=%.2f Y=%.2f Z=%.2f"), 
-               Scale.X, Scale.Y, Scale.Z);
-        
-        // 태그 정보
-        if (Actor->Tags.Num() > 0)
+        FString TagStr = Tag.ToString();
+        if (TagStr.StartsWith(TEXT("ImportedPart_")))
         {
-            UE_LOG(LogTemp, Display, TEXT("  태그 목록:"));
-            for (const FName& Tag : Actor->Tags)
-            {
-                UE_LOG(LogTemp, Display, TEXT("    %s"), *Tag.ToString());
-            }
+            // "ImportedPart_" 접두사 제거하여 파트 번호 추출
+            PartNo = TagStr.RightChop(13); // "ImportedPart_" 길이는 13
+            break;
         }
-        else
-        {
-            UE_LOG(LogTemp, Display, TEXT("  태그 없음"));
-        }
-        
-        // ImportedNodeManager에 등록되었는지 확인
-        FString PartNo;
-        // ImportedPart_ 태그에서 파트 번호 추출
-        for (const FName& Tag : Actor->Tags)
-        {
-            FString TagStr = Tag.ToString();
-            if (TagStr.StartsWith(TEXT("ImportedPart_")))
-            {
-                PartNo = TagStr.RightChop(13); // "ImportedPart_" 길이는 13
-                break;
-            }
-        }
-        
-        if (!PartNo.IsEmpty())
-        {
-            bool bIsRegistered = FImportedNodeManager::Get().IsNodeImported(PartNo);
-            UE_LOG(LogTemp, Display, TEXT("  파트 번호: %s (ImportedNodeManager 등록: %s)"), 
-                   *PartNo, bIsRegistered ? TEXT("예") : TEXT("아니오"));
-        }
-        
-        // 컴포넌트 정보
-        TArray<UActorComponent*> Components;
-        Actor->GetComponents(Components);
-        
-        UE_LOG(LogTemp, Display, TEXT("  컴포넌트 개수: %d"), Components.Num());
-        for (UActorComponent* Component : Components)
-        {
-            if (!Component) continue;
-            
-            UE_LOG(LogTemp, Display, TEXT("    %s (클래스: %s)"), 
-                   *Component->GetName(), *Component->GetClass()->GetName());
-            
-            // StaticMeshComponent인 경우 추가 정보
-            if (UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(Component))
-            {
-                if (UStaticMesh* Mesh = MeshComp->GetStaticMesh())
-                {
-                    UE_LOG(LogTemp, Display, TEXT("      메시: %s"), *Mesh->GetName());
-                    
-                    // 머티리얼 정보
-                    int32 MaterialCount = MeshComp->GetNumMaterials();
-                    UE_LOG(LogTemp, Display, TEXT("      머티리얼 개수: %d"), MaterialCount);
-                    
-                    for (int32 i = 0; i < MaterialCount; ++i)
-                    {
-                        if (UMaterialInterface* Material = MeshComp->GetMaterial(i))
-                        {
-                            UE_LOG(LogTemp, Display, TEXT("        머티리얼[%d]: %s"), 
-                                   i, *Material->GetName());
-                        }
-                    }
-                }
-            }
-        }
-        
-        UE_LOG(LogTemp, Display, TEXT("  --------------------------"));
     }
     
-    UE_LOG(LogTemp, Display, TEXT("=== 선택된 액터의 메타데이터 출력 종료 ==="));
+    // 파트 번호를 찾지 못한 경우 액터 이름 사용
+    if (PartNo.IsEmpty())
+    {
+        PartNo = SelectedActor->GetName();
+        UE_LOG(LogTemp, Warning, TEXT("액터에서 파트 번호 태그를 찾을 수 없어 액터 이름을 사용합니다: %s"), *PartNo);
+    }
+    
+    // 트리뷰 인스턴스 확인
+    TSharedPtr<SLevelBasedTreeView> TreeViewInst = SLevelBasedTreeView::Get();
+    if (!TreeViewInst.IsValid())
+    {
+        FNotificationInfo Info(FText::FromString(TEXT("트리뷰가 초기화되지 않았습니다. 먼저 Parts Tree 탭을 열어주세요.")));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
+        return;
+    }
+    
+    // 선택하지는 않고 파트 번호로 노드만 찾기
+    // 여기서는 SelectNodeByPartNo 함수를 사용하지 않고 내부 로직을 직접 활용한다고 가정
+    // 실제 코드에서는 TreeViewInst의 내부 멤버에 접근할 수 있는 별도 함수가 필요할 수 있습니다
+    
+    // 여기서는 SelectNodeByPartNo 함수를 호출하고, 선택된 항목 정보를 로그로 출력
+    bool bSuccess = TreeViewInst->SelectNodeByPartNo(PartNo);
+    
+    if (!bSuccess)
+    {
+        FNotificationInfo Info(FText::Format(
+            LOCTEXT("NodeNotFoundForActor", "액터 '{0}'에 해당하는 노드를 찾을 수 없습니다."),
+            FText::FromString(SelectedActor->GetName())));
+        Info.ExpireDuration = 4.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
+        return;
+    }
+    
+    // 메타데이터 출력 - 실제 선택된 노드 정보 표시는 내부적으로 처리됨
+    UE_LOG(LogTemp, Display, TEXT("=== 액터 '%s'에 해당하는 노드의 메타데이터 출력 시작 ==="), *SelectedActor->GetName());
+    
+    // TreeViewInst가 갖고 있는 현재 선택된 노드의 메타데이터 정보를 활용
+    FText MetadataText = TreeViewInst->GetSelectedItemMetadata();
+    UE_LOG(LogTemp, Display, TEXT("%s"), *MetadataText.ToString());
+    
+    // 추가 정보 - 이 정보는 GetSelectedItemMetadata에 포함되지 않을 수 있음
+    UE_LOG(LogTemp, Display, TEXT("액터 정보: %s (클래스: %s)"), 
+           *SelectedActor->GetName(), *SelectedActor->GetClass()->GetName());
+    
+    UE_LOG(LogTemp, Display, TEXT("=== 액터 '%s'에 해당하는 노드의 메타데이터 출력 종료 ==="), *SelectedActor->GetName());
     
     // 완료 알림 표시
-    FNotificationInfo Info(LOCTEXT("MetadataLoggedNotif", "액터 메타데이터가 출력 로그에 기록되었습니다."));
+    FNotificationInfo Info(FText::Format(
+        LOCTEXT("NodeMetadataLogged", "액터 '{0}'에 해당하는 노드의 메타데이터가 출력 로그에 기록되었습니다."),
+        FText::FromString(SelectedActor->GetName())));
     Info.ExpireDuration = 4.0f;
     Info.bUseLargeFont = false;
     FSlateNotificationManager::Get().AddNotification(Info);
